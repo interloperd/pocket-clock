@@ -393,6 +393,41 @@ main{transition:transform .9s cubic-bezier(.4,0,.2,1);transform-origin:0 0}
 .tcount{position:fixed;inset:0;z-index:59;display:grid;place-items:center;background:var(--bar);color:var(--pylon);font-family:var(--mono);font-weight:700;font-size:160px}
 .tstop{position:fixed;right:max(12px,env(safe-area-inset-right,0px));top:calc(10px + env(safe-area-inset-top,0px));z-index:61;opacity:.25;font-size:12px}
 .tstop:hover{opacity:1}
+
+/* Hors de l'écran Direct, le lecteur se réduit à son bouton principal */
+body:not([data-view=direct]) .toolbar .player > :not(#liveBtn){display:none}
+/* ===== Téléphone : barre d'outils compacte, lecteur seulement sur Direct ===== */
+@media (max-width:900px){
+  .toolbar{position:static;border-bottom-width:1px}
+  .tb-row{padding-block:8px;gap:8px}
+  .toolbar .duel{display:grid;grid-template-columns:1fr 1fr;gap:6px 8px;width:100%;align-items:end}
+  .toolbar .duel .seg{grid-column:1/-1;width:100%}
+  .toolbar .duel .seg button{flex:1}
+  .toolbar .vsx{display:none}
+  .toolbar .fld{flex:none}
+  .toolbar .fld span{font-size:10px}
+  .toolbar .fld select{width:100%;font-size:14px;padding:5px 8px}
+  body:not([data-view=direct]) .toolbar .player{display:none}
+  .toolbar .player{display:grid;grid-template-columns:auto 1fr;gap:6px;width:100%}
+  .toolbar .player .pmeta{grid-column:2}
+  .toolbar .player #liveSpeed{grid-column:1/-1;justify-content:space-between;width:100%}
+  .toolbar .player #liveSpeed button{flex:1}
+  .toolbar .player .skip.wide{flex:1}
+  .toolbar .player #livePrev{grid-column:1}
+  .toolbar .player #liveNext{grid-column:2}
+  .toolbar .player #liveEnd{grid-column:1/-1}
+  .livebtn{min-width:0;padding:8px 12px;font-size:15px}
+  .side .tabs button{min-width:54px;padding:6px 4px;font-size:10px;letter-spacing:.02em}
+  .side .tabs button svg{width:18px;height:18px}
+  .pagehead h1{font-size:34px}
+  .pagehead p{font-size:14px}
+  main{padding-top:14px}
+  .grid{gap:12px}
+  .win-b{padding:12px}
+  .reco-b .verb{font-size:30px}
+  .scoreb .sb-in{gap:6px}
+  .sb-abbr,.sb-team b{font-size:30px}
+}
 /* Un élément masqué reste masqué, quelle que soit sa mise en page (dernière règle, priorité maximale) */
 :root [hidden][hidden][hidden]{display:none!important}
 </style>
@@ -1034,6 +1069,7 @@ function show(v){
   if(!VIEWS.includes(v)) v = 'match';
   document.querySelectorAll('section.view').forEach(sec=>sec.hidden = sec.dataset.view !== v);
   document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on', b.dataset.view===v));
+  document.body.dataset.view = v;
   try{ if(location.hash.slice(1)!==v) history.replaceState(null,'','#'+v); }catch(e){}
   if(v==='rejeu') safe('field', draw);
   try{ window.scrollTo({top:0}); }catch(e){}
