@@ -1,0 +1,13 @@
+data/
+_repo/
+*.csv
+dashboard_data.json
+validation.json
+__pycache__/
+.pytest_cache/
+.ipynb_checkpoints/
+.DS_Store
+music.mp3
+*.mp4
+make_notebook.py
+data

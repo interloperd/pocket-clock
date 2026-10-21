@@ -1,0 +1,1502 @@
+<title>Pocket Clock</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=Montserrat:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout : une feuille de match — chrono en tête, terrain au centre, puis les preuves (courbe, demi-secondes, classements) */
+:root{
+  --bg:#eef0e8; --panel:#f8f9f4; --ink:#14201a; --muted:#5b6a60; --line:#cfd6cb;
+  --turf:#2f5a3e; --turf2:#2a5238; --chalk:#f4f6ef;
+  --pylon:#e8590c; --off:#1f4f8a; --block:#5d86c0; --def:#b9493a; --rush:#e8590c; --ball:#7a4a1e;
+  --good:#2f7d4f; --bad:#c2410c;
+  --display:"Big Shoulders Display","Barlow Condensed","Arial Narrow",sans-serif;
+  --body:"Montserrat",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --label:"Barlow Condensed","Arial Narrow",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1712; --panel:#16211a; --ink:#e8eee6; --muted:#93a398; --line:#2a3a30;
+  --turf:#1f3d2a; --turf2:#1b3725; --chalk:#dfe7dc;
+  --off:#6ea3e6; --block:#9cbcea; --def:#e07a6a; --good:#5cc489; --bad:#fb8a4c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1712; --panel:#16211a; --ink:#e8eee6; --muted:#93a398; --line:#2a3a30;
+  --turf:#1f3d2a; --turf2:#1b3725; --chalk:#dfe7dc;
+  --off:#6ea3e6; --block:#9cbcea; --def:#e07a6a; --good:#5cc489; --bad:#fb8a4c; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 60px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:40px}
+h1,h2{font-family:var(--display);text-wrap:balance;margin:0;letter-spacing:.01em}
+h1{font-size:clamp(46px,8vw,92px);font-weight:900;line-height:.9;text-transform:uppercase}
+h2{font-size:clamp(28px,4vw,40px);font-weight:800;text-transform:uppercase;line-height:1}
+.eyebrow{font-family:var(--label);font-weight:600;text-transform:uppercase;letter-spacing:.14em;font-size:13px;color:var(--pylon)}
+p{margin:0;max-width:65ch}
+.muted{color:var(--muted)}
+.num{font-variant-numeric:tabular-nums}
+header{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:32px;align-items:end}
+.lede{font-size:18px;margin-top:14px}
+.clockbig{font-family:var(--mono);font-weight:700;font-size:clamp(64px,10vw,120px);line-height:1;color:var(--pylon);letter-spacing:-.04em}
+.clockbig small{font-size:.35em;color:var(--muted);letter-spacing:0;margin-left:6px}
+.hero-r{display:grid;gap:6px;justify-items:start}
+.vs{display:grid;grid-template-columns:1fr 1fr;border-top:2px solid var(--ink);border-bottom:1px solid var(--line)}
+.vs>div{padding:16px 18px 18px;display:grid;gap:10px}
+.vs>div+div{border-left:1px solid var(--line)}
+.vs .tag{font-family:var(--label);font-weight:700;text-transform:uppercase;letter-spacing:.1em;font-size:14px}
+.stats{display:flex;gap:28px;flex-wrap:wrap}
+.stat b{display:block;font-family:var(--display);font-size:44px;font-weight:800;line-height:1}
+.stat span{font-family:var(--label);text-transform:uppercase;letter-spacing:.08em;font-size:12px;color:var(--muted)}
+.clean b{color:var(--good)} .breach b{color:var(--bad)}
+section{display:grid;gap:18px}
+.sechead{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}
+.sechead>div{display:grid;gap:6px;min-width:0}
+/* replay */
+.replay{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;align-items:start}
+.fieldbox{background:var(--turf);border-radius:6px;overflow:hidden;position:relative}
+canvas{display:block;width:100%;height:auto}
+.hud{position:absolute;top:10px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:start;pointer-events:none}
+.hud .pc{font-family:var(--mono);font-weight:700;font-size:38px;color:#f4f6ef;background:rgba(10,20,14,.55);padding:2px 12px;border-radius:4px;line-height:1.2}
+.hud .pc.hit{background:#c2410c}
+.hud .st{font-family:var(--label);font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#f4f6ef;background:rgba(10,20,14,.55);padding:4px 10px;border-radius:4px;font-size:13px}
+.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+button,select{font-family:var(--label);font-weight:600;font-size:15px;letter-spacing:.04em;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:4px;padding:7px 12px;cursor:pointer}
+button:hover,select:hover{border-color:var(--pylon)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--pylon);outline-offset:2px}
+button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+input[type=range]{flex:1;min-width:120px;accent-color:var(--pylon)}
+.playlist{display:grid;gap:6px;max-height:520px;overflow:auto;padding-right:4px}
+.pl{display:grid;grid-template-columns:52px 1fr;gap:10px;align-items:center;text-align:left;padding:8px 10px;border-radius:4px}
+.pl .t{font-family:var(--mono);font-weight:700;font-size:16px}
+.pl .m{font-size:13px;line-height:1.3;min-width:0}
+.pl .m b{font-family:var(--label);font-weight:700;letter-spacing:.04em;font-size:14px}
+.pl.on{border-color:var(--pylon);box-shadow:inset 3px 0 0 var(--pylon)}
+.chip{display:inline-block;font-family:var(--label);font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:1px 6px;border-radius:3px;margin-left:4px;vertical-align:1px}
+.chip.S,.chip.IN{background:var(--bad);color:#fff}.chip.C{background:var(--good);color:#fff}.chip.I,.chip.R{background:var(--line);color:var(--ink)}
+.desc{font-size:14px;color:var(--muted);margin-top:8px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-family:var(--label);font-size:13px;letter-spacing:.04em;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:0}
+/* charts */
+.two{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:32px}
+.chartcard{display:grid;gap:12px;min-width:0}
+svg text{fill:var(--muted);font-family:var(--label);font-size:12px}
+svg .ax{stroke:var(--line)}
+.seg{display:flex;gap:0}
+.seg button{border-radius:0}.seg button:first-child{border-radius:4px 0 0 4px}.seg button:last-child{border-radius:0 4px 4px 0}
+/* tables */
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:14px}
+th{font-family:var(--label);font-weight:600;text-transform:uppercase;letter-spacing:.08em;font-size:12px;color:var(--muted);text-align:right;padding:8px 10px;border-bottom:2px solid var(--ink);white-space:nowrap;cursor:pointer;user-select:none}
+th:first-child,th:nth-child(2),td:first-child,td:nth-child(2){text-align:left}
+th.sorted{color:var(--pylon)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+td.name{font-weight:600}
+tr:hover td{background:var(--panel)}
+.bar{display:inline-block;height:8px;background:var(--pylon);border-radius:2px;vertical-align:1px;margin-right:8px;opacity:.85}
+.note{font-size:13px;color:var(--muted);max-width:80ch}
+.takeaways{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;border-top:2px solid var(--ink);counter-reset:t}
+.takeaways li{counter-increment:t;padding:16px 18px 18px 58px;border-bottom:1px solid var(--line);position:relative;font-size:15px;line-height:1.45}
+.takeaways li:nth-child(odd){border-right:1px solid var(--line)}
+.takeaways li::before{content:counter(t);position:absolute;left:18px;top:12px;font-family:var(--display);font-weight:900;font-size:34px;line-height:1;color:var(--pylon)}
+.takeaways b{font-weight:700}
+@media (max-width:700px){.takeaways{grid-template-columns:minmax(0,1fr)}.takeaways li:nth-child(odd){border-right:0}}
+.live{border:2px solid var(--ink);display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);background:var(--panel)}
+.live .in{padding:18px;display:grid;gap:14px;align-content:start;border-right:1px solid var(--line)}
+.live .in label{display:grid;gap:4px;font-family:var(--label);font-weight:600;text-transform:uppercase;letter-spacing:.08em;font-size:12px;color:var(--muted)}
+.live .in select{width:100%;text-transform:none;letter-spacing:0}
+.live .out{padding:18px 22px;display:grid;gap:16px;align-content:start;min-width:0}
+.reco{display:grid;gap:6px}
+.reco .verb{font-family:var(--display);font-weight:900;font-size:clamp(30px,4.5vw,48px);line-height:1;text-transform:uppercase;color:var(--pylon)}
+.reco .why{font-size:15px;max-width:70ch}
+.conf{display:inline-flex;align-items:center;gap:6px;font-family:var(--label);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:12px;padding:3px 8px;border-radius:3px;width:max-content}
+.conf.hi{background:var(--good);color:#fff}.conf.mid{background:var(--line);color:var(--ink)}
+.opt td.best{font-weight:700}.opt tr.best td{background:color-mix(in srgb,var(--pylon) 12%,transparent)}
+.valid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;border-top:2px solid var(--ink)}
+.valid>div{padding:14px 16px;border-bottom:1px solid var(--line);display:grid;gap:8px;align-content:start;min-width:0}
+.valid>div:not(:last-child){border-right:1px solid var(--line)}
+.valid h3{margin:0;font-family:var(--label);font-weight:700;text-transform:uppercase;letter-spacing:.08em;font-size:14px}
+.valid .big{font-family:var(--display);font-weight:800;font-size:34px;line-height:1}
+.mini{width:100%;font-size:13px}.mini td,.mini th{padding:4px 6px}
+@media (max-width:860px){.live{grid-template-columns:minmax(0,1fr)}.live .in{border-right:0;border-bottom:1px solid var(--line)}.valid{grid-template-columns:minmax(0,1fr)}.valid>div:not(:last-child){border-right:0}}
+.cardgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:2px solid var(--ink)}
+.tile{padding:16px 18px;border-bottom:1px solid var(--line);display:grid;gap:4px;min-width:0}
+.tile:not(:nth-child(3n)){border-right:1px solid var(--line)}
+.tile .lab{font-family:var(--label);font-weight:600;text-transform:uppercase;letter-spacing:.08em;font-size:12px;color:var(--muted)}
+.tile .val{font-family:var(--display);font-weight:800;font-size:40px;line-height:1}
+.tile .rk{font-family:var(--label);font-weight:700;font-size:14px;letter-spacing:.04em}
+.tile .rk.top{color:var(--good)}.tile .rk.low{color:var(--bad)}.tile .rk.mid{color:var(--muted)}
+.tile .ex{font-size:12px;color:var(--muted)}
+.ctxgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px 40px}
+.ctx h3{font-family:var(--label);font-weight:700;text-transform:uppercase;letter-spacing:.08em;font-size:15px;margin:0 0 10px}
+.hb{display:grid;grid-template-columns:150px minmax(0,1fr) 92px;gap:10px;align-items:center;font-size:13px;padding:5px 0;border-bottom:1px solid var(--line)}
+.hb .tr{height:12px;background:var(--line);border-radius:2px;overflow:hidden}.hb .tr i{display:block;height:100%;background:var(--pylon)}
+.hb .v{font-variant-numeric:tabular-nums;text-align:right;font-weight:600}
+.hb .v small{color:var(--muted);font-weight:400}
+.err{color:var(--bad);font-size:13px}
+@media (max-width:700px){.takeaways{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;border-top:2px solid var(--ink);counter-reset:t}
+.takeaways li{counter-increment:t;padding:16px 18px 18px 58px;border-bottom:1px solid var(--line);position:relative;font-size:15px;line-height:1.45}
+.takeaways li:nth-child(odd){border-right:1px solid var(--line)}
+.takeaways li::before{content:counter(t);position:absolute;left:18px;top:12px;font-family:var(--display);font-weight:900;font-size:34px;line-height:1;color:var(--pylon)}
+.takeaways b{font-weight:700}
+@media (max-width:700px){.takeaways{grid-template-columns:minmax(0,1fr)}.takeaways li:nth-child(odd){border-right:0}}
+.cardgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.tile:not(:nth-child(3n)){border-right:0}.tile:nth-child(odd){border-right:1px solid var(--line)}.ctxgrid{grid-template-columns:minmax(0,1fr)}.hb{grid-template-columns:110px minmax(0,1fr) 84px}}
+footer{border-top:1px solid var(--line);padding-top:16px;font-size:13px;color:var(--muted);display:grid;gap:6px}
+@media (max-width:860px){header,.replay,.two{grid-template-columns:minmax(0,1fr)} .playlist{max-height:300px}}
+@media (max-width:480px){.vs{grid-template-columns:1fr}.vs>div+div{border-left:0;border-top:1px solid var(--line)} .stat b{font-size:36px} .hud .pc{font-size:26px}}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+
+/* ===== Coque d'application ===== */
+:root{--bar:#14201a;--barfg:#eef0e8;--barmut:#9fb0a5;--win:#fbfcf8;--winh:#eef1e9}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bar:#0a110d;--barfg:#e8eee6;--barmut:#93a398;--win:#16211a;--winh:#1b2820}}
+:root[data-theme="dark"]{--bar:#0a110d;--barfg:#e8eee6;--barmut:#93a398;--win:#16211a;--winh:#1b2820}
+body{padding:0!important}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bar)}
+.app{min-height:100%}
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bar);color:var(--barfg);box-shadow:0 2px 0 var(--pylon)}
+.tb-in,.tabs,main{max-width:1360px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.tb-in{display:flex;justify-content:space-between;align-items:center;gap:14px 24px;flex-wrap:wrap;padding-block:12px 8px}
+.brand{display:grid;gap:2px;min-width:0}
+.logo{font-family:var(--display);font-weight:900;font-size:30px;line-height:1;text-transform:uppercase;letter-spacing:.02em;color:var(--barfg)}
+.logo::first-letter{color:var(--pylon)}
+.tag2{font-size:12px;color:var(--barmut);max-width:52ch}
+.duel{display:flex;align-items:end;gap:10px;flex-wrap:wrap}
+.fld{display:grid;gap:3px}
+.fld span{font-family:var(--label);font-weight:600;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--barmut)}
+.topbar select{background:#ffffff14;color:var(--barfg);border-color:#ffffff2e;padding:6px 10px;font-size:15px}
+.topbar select option{color:#14201a}
+.vsx{font-family:var(--display);font-weight:800;color:var(--pylon);font-size:22px;padding-bottom:4px}
+.seg.dark button{background:transparent;color:var(--barfg);border-color:#ffffff2e}
+.seg.dark button.on{background:var(--pylon);border-color:var(--pylon);color:#fff}
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+.tabs button{background:transparent;border:0;border-bottom:3px solid transparent;border-radius:0;color:var(--barmut);font-size:15px;padding:8px 14px 9px;white-space:nowrap}
+.tabs button:hover{color:var(--barfg)}
+.tabs button.on{color:var(--barfg);border-bottom-color:var(--pylon)}
+main{padding-block:18px 48px}
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px}
+.s4{grid-column:span 4}.s5{grid-column:span 5}.s6{grid-column:span 6}.s7{grid-column:span 7}.s8{grid-column:span 8}.s12{grid-column:span 12}
+.win{background:var(--win);border:1px solid var(--line);border-radius:8px;overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.win.hot{border-color:var(--pylon);box-shadow:0 0 0 1px var(--pylon)}
+.win-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 14px;background:var(--winh);border-bottom:1px solid var(--line)}
+.wt{font-family:var(--label);font-weight:700;text-transform:uppercase;letter-spacing:.09em;font-size:13px}
+.wx{font-size:12px;color:var(--muted)}
+.win-b{padding:14px;display:grid;gap:12px;align-content:start;min-width:0}
+.win-b.flush{padding:0}
+.reco-b .verb{font-size:clamp(32px,4.4vw,52px)}
+.glance{gap:14px}
+.glance .lab,.glance .lab2{font-family:var(--label);font-weight:600;text-transform:uppercase;letter-spacing:.08em;font-size:11px;color:var(--muted)}
+.glance .clockbig{font-size:clamp(54px,7vw,84px)}
+.gl2{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line)}
+.gl2>div{display:grid;padding:10px 10px 0 0;align-content:start}
+.gl2>div+div{border-left:1px solid var(--line);padding-left:12px}
+.gl2 b{font-family:var(--display);font-weight:800;font-size:34px;line-height:1}
+.gl2 b.sm{font-size:22px;margin-top:6px}
+.gl2 .clean b{color:var(--good)}.gl2 .breach b{color:var(--bad)}
+.cardgrid{border-top:0}
+.takeaways{border-top:0}
+.valid{border-top:0}
+.tablewrap.tall{max-height:560px;overflow:auto}
+.seg.sm button{padding:4px 10px;font-size:13px}
+.replay{grid-template-columns:minmax(0,1fr) 280px}
+@media (max-width:980px){.s4,.s5,.s6,.s7,.s8{grid-column:span 12}}
+@media (max-width:700px){.tag2{display:none}.logo{font-size:24px}.duel{gap:8px}.fld select{font-size:14px;padding:5px 8px}}
+
+.navrow{max-width:1360px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:8px 16px;flex-wrap:wrap;padding-right:max(16px,env(safe-area-inset-right,0px))}
+.navrow .tabs{margin:0;flex:1;min-width:0}
+.livebar{display:flex;align-items:center;gap:8px;padding-block:4px 6px;padding-left:max(16px,env(safe-area-inset-left,0px));flex-wrap:wrap}
+.livebtn{background:var(--pylon);border-color:var(--pylon);color:#fff;font-weight:700;font-size:16px;padding:7px 16px;min-width:120px}
+.livebtn.on{background:#fff;color:#c2410c;border-color:#fff}
+.livebar select{max-width:190px}
+.lprog{width:110px;height:6px;background:#ffffff26;border-radius:3px;overflow:hidden}.lprog i{display:block;height:100%;width:0;background:var(--pylon);transition:width .3s}
+.tabs button[data-view=direct]{color:#ff8a4c}
+.scoreb .sb-in{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;padding-block:12px}
+.sb-team{display:flex;align-items:center;gap:14px}.sb-team.r{justify-content:flex-end}
+.sb-abbr{font-family:var(--display);font-weight:900;font-size:clamp(28px,4vw,44px);line-height:1}
+.sb-team b{font-family:var(--mono);font-size:clamp(28px,4vw,44px);line-height:1;color:var(--pylon)}
+.sb-mid{display:grid;justify-items:center;gap:4px;text-align:center}
+#sbClock{font-family:var(--mono);font-weight:700;font-size:18px}
+.livepill,.pill{font-family:var(--label);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:12px;padding:3px 10px;border-radius:999px;background:var(--line);color:var(--ink)}
+.livepill.on{background:#d92d20;color:#fff;animation:blink 1.4s infinite}
+@keyframes blink{50%{opacity:.55}}
+.pill.ok{background:var(--good);color:#fff}.pill.hit{background:var(--bad);color:#fff}
+.cur{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.curclock{font-family:var(--mono);font-weight:700;font-size:clamp(48px,7vw,76px);line-height:1}
+.curclock.hit{color:var(--bad)}
+.curstate{display:grid;gap:6px;justify-items:start}
+.verb.sm{font-family:var(--display);font-weight:900;font-size:clamp(28px,3.4vw,40px);line-height:1;text-transform:uppercase;color:var(--pylon)}
+.feed{list-style:none;margin:0;padding:0;max-height:330px;overflow:auto}
+.feed li{display:grid;grid-template-columns:54px 1fr;gap:10px;padding:8px 14px;border-bottom:1px solid var(--line);font-size:13px;line-height:1.35}
+.feed li .t{font-family:var(--mono);font-weight:700}
+.feed li.new{animation:flash 1.2s}
+@keyframes flash{from{background:color-mix(in srgb,var(--pylon) 25%,transparent)}to{background:transparent}}
+.alerts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:14px}
+.alerts:empty{display:none}
+.alert{border-left:5px solid var(--bad)}
+.alert.good{border-left-color:var(--good)}
+.alert .win-b{gap:6px}
+.alert .x{background:transparent;border:0;font-size:18px;line-height:1;padding:0 4px;color:var(--muted)}
+.alert b.h{font-family:var(--display);font-weight:800;font-size:22px;line-height:1.05;text-transform:uppercase}
+.alert.pop{animation:pop .5s ease-out}
+@keyframes pop{from{transform:translateY(-6px);opacity:.3}to{transform:none;opacity:1}}
+.cmp{display:grid;grid-template-columns:60px minmax(0,1fr) 150px;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+.cmp .tr{position:relative;height:14px;background:var(--line);border-radius:2px}
+.cmp .tr i{position:absolute;inset:0 auto 0 0;background:var(--pylon);border-radius:2px}
+.cmp .tr s{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink)}
+@media (prefers-reduced-motion:reduce){.livepill.on,.feed li.new,.alert.pop{animation:none}}
+@media (max-width:700px){.scoreb .sb-in{grid-template-columns:1fr 1fr}.sb-mid{grid-column:1/-1;order:-1}.cmp{grid-template-columns:44px minmax(0,1fr) 110px}}
+
+.skip{background:transparent;color:var(--barfg);border-color:#ffffff2e}
+.endov{position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:rgba(8,14,10,.82);padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.endov[hidden]{display:none!important}
+.endcard{background:var(--bar);color:var(--barfg);border:2px solid var(--pylon);border-radius:12px;padding:28px 26px;max-width:560px;width:100%;display:grid;gap:12px;justify-items:center;text-align:center;overflow:hidden;position:relative;animation:rise .6s ease-out}
+.endcard h2{color:var(--barfg);font-size:clamp(26px,5vw,40px)}
+.endcard .note{color:var(--barmut)}
+.endcard button:not(.livebtn){background:transparent;color:var(--barfg);border-color:#ffffff40}
+.final{font-family:var(--label);font-weight:700;letter-spacing:.3em;text-transform:uppercase;color:var(--pylon);font-size:14px;animation:fadein .4s .9s both}
+.endscore{display:flex;align-items:center;gap:14px;font-family:var(--display);font-weight:900;font-size:clamp(34px,8vw,64px);line-height:1;animation:fadein .5s 1.1s both}
+.endscore b{font-family:var(--mono);color:var(--pylon)}
+.endscore i{font-style:normal;color:var(--barmut)}
+.ball{width:110px;height:64px;animation:spiral 1.3s cubic-bezier(.2,.7,.3,1) both}
+@keyframes spiral{0%{transform:translate(-260px,90px) rotate(-35deg) scale(.5)}60%{transform:translate(20px,-30px) rotate(-10deg) scale(1.05)}100%{transform:none}}
+@keyframes rise{from{transform:translateY(20px) scale(.97);opacity:0}to{transform:none;opacity:1}}
+@keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.ball,.endcard,.final,.endscore{animation:none}}
+
+/* ===== Coque d'application, caractère d'origine : terrain, signalétique de stade, pylône orange ===== */
+:root{--side:#14201a;--sidefg:#eef0e8;--sidemut:#9fb0a5;--sel:#ffffff14;--shadow:0 1px 0 rgba(20,32,26,.04)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--side:#0a110d;--sidefg:#e8eee6;--sidemut:#93a398;--sel:#ffffff12;--shadow:none}}
+:root[data-theme="dark"]{--side:#0a110d;--sidefg:#e8eee6;--sidemut:#93a398;--sel:#ffffff12;--shadow:none}
+html,body{height:100%}
+body::before{background:var(--side)}
+.app{display:grid;grid-template-columns:236px minmax(0,1fr);min-height:100%}
+.side{position:sticky;top:env(safe-area-inset-top,0px);height:calc(100dvh - env(safe-area-inset-top,0px));overflow:auto;background:var(--side);color:var(--sidefg);display:flex;flex-direction:column;gap:12px;padding:18px 12px 14px max(12px,env(safe-area-inset-left,0px));box-shadow:inset -3px 0 0 var(--pylon)}
+.brand2{display:flex;align-items:center;gap:10px;padding:2px 6px 10px}
+.brand2 .mark{display:grid;place-items:center;width:36px;height:36px;border-radius:6px;background:var(--pylon);color:#fff;font-family:var(--display);font-weight:900;font-size:16px}
+.brand2 b{display:block;font-family:var(--display);font-weight:900;font-size:24px;line-height:1;text-transform:uppercase;letter-spacing:.02em}
+.brand2 small{color:var(--sidemut);font-family:var(--label);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.side .tabs{display:flex;flex-direction:column;gap:2px;overflow:visible;padding:0;max-width:none;margin:0}
+.side .grp{font-family:var(--label);font-weight:600;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--pylon);padding:14px 10px 4px}
+.side .tabs button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;border-left:3px solid transparent;border-radius:4px;background:transparent;color:var(--sidemut);font-family:var(--label);font-weight:600;font-size:16px;letter-spacing:.04em;padding:8px 10px}
+.side .tabs button svg{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.side .tabs button:hover{color:var(--sidefg);background:var(--sel)}
+.side .tabs button.on{color:var(--sidefg);background:var(--sel);border-left-color:var(--pylon)}
+.side .tabs button.on svg{color:var(--pylon)}
+.side .tabs button[data-view=direct]{color:#ff8a4c}
+.sidefoot{font-size:11px;color:var(--sidemut);padding:0 8px}
+.content{min-width:0;display:flex;flex-direction:column}
+.toolbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:2px solid var(--ink)}
+.tb-row{display:flex;justify-content:space-between;align-items:end;gap:12px 20px;flex-wrap:wrap;padding-block:10px;padding-left:22px;padding-right:max(22px,env(safe-area-inset-right,0px))}
+.toolbar .fld span{color:var(--muted)}
+.toolbar select{background:var(--panel);color:var(--ink);border:1px solid var(--line)}
+.vsx{color:var(--pylon)}
+.seg button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.player{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pmeta{display:grid;gap:5px}
+.pmeta select{max-width:210px}
+.livebtn{background:var(--pylon);border:1px solid var(--pylon);color:#fff;font-family:var(--label);font-weight:700;font-size:16px;letter-spacing:.06em;text-transform:uppercase;padding:8px 16px;min-width:120px;border-radius:4px}
+.livebtn.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.skip{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:4px;height:36px;padding:0 10px}
+.skip.wide{font-family:var(--label);font-weight:600;font-size:14px;letter-spacing:.04em}
+.lprog{width:100%;min-width:120px;height:5px;background:var(--line);border-radius:2px}
+main{max-width:1320px;width:100%;margin:0 auto;padding-block:20px 56px;padding-left:22px;padding-right:max(22px,env(safe-area-inset-right,0px))}
+.pagehead{display:grid;gap:4px;padding:2px 0 4px}
+.pagehead h1{font-size:clamp(38px,5vw,60px);line-height:.95}
+.pagehead p{color:var(--muted);font-size:15px;max-width:80ch}
+.win.hot{border-color:var(--pylon);box-shadow:0 0 0 1px var(--pylon)}
+.obagain{background:transparent;border:1px solid #ffffff2e;color:var(--sidefg);font-family:var(--label);font-weight:600;letter-spacing:.04em;font-size:14px}
+.skip.wide:hover,.obagain:hover{border-color:var(--pylon)}
+@media (max-width:900px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .side{position:fixed;inset:auto 0 0 0;top:auto;height:auto;z-index:8;flex-direction:row;padding:4px max(8px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px));box-shadow:inset 0 3px 0 var(--pylon)}
+  .brand2,.sidefoot,.side .grp,.obagain{display:none}
+  .side .tabs{flex-direction:row;gap:0;width:100%;overflow-x:auto}
+  .side .tabs button{flex-direction:column;gap:2px;font-size:11px;padding:6px 8px;min-width:66px;align-items:center;text-align:center;border-left:0;border-top:3px solid transparent}
+  .side .tabs button.on{border-top-color:var(--pylon)}
+  main{padding-bottom:110px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .tb-row{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+}
+.obov{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(10,12,14,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.obov[hidden]{display:none!important}
+.obcard{background:var(--panel);color:var(--ink);border-radius:10px;border-top:4px solid var(--pylon);box-shadow:0 24px 70px rgba(0,0,0,.35);width:100%;max-width:600px;max-height:100%;overflow:auto;display:grid;gap:18px;padding:26px 26px 20px;animation:rise .45s ease-out}
+.obs{display:grid;gap:12px;animation:fadein .35s ease-out}
+.obs h2{font-size:clamp(30px,5vw,44px);line-height:1;text-transform:uppercase}
+.obs p{font-size:15.5px;line-height:1.55;color:var(--ink);max-width:62ch}
+.obk{font-family:var(--label);font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--pylon)}
+.obsvg{width:100%;height:auto;border-radius:6px}
+.obsvg .rush{animation:press 2.6s ease-in-out infinite alternate}
+.obsvg .zone{animation:warn 2.6s ease-in-out infinite alternate}
+@keyframes press{from{transform:translateX(0)}to{transform:translateX(-24px)}}
+@keyframes warn{from{stroke:#f4f6ef}to{stroke:#e8590c}}
+.obstats{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.obstats div{background:var(--bg);border-radius:6px;padding:16px;display:grid;gap:4px}
+.obstats b{font-family:var(--display);font-size:clamp(40px,7vw,56px);font-weight:800;line-height:1}
+.obstats b.ok{color:var(--good)}.obstats b.ko{color:var(--bad)}
+.obstats span{font-size:13px;color:var(--muted)}
+.obclock{font-family:var(--mono);font-weight:700;font-size:clamp(56px,10vw,88px);color:var(--pylon);letter-spacing:-.04em;line-height:1}
+.obfeat{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.obfeat li{display:grid;gap:2px;padding:12px 14px;background:var(--bg);border-radius:6px;border-left:3px solid var(--pylon)}
+.obfeat b{font-family:var(--label);font-size:17px;letter-spacing:.04em;text-transform:uppercase}.obfeat span{font-size:14px;color:var(--muted)}
+.obbtns{display:flex;gap:8px;align-items:center}
+.obprev{background:transparent;border:1px solid var(--line);color:var(--ink);font-family:var(--label);font-weight:600;font-size:15px;letter-spacing:.04em;border-radius:4px;padding:8px 14px}
+.obprev:disabled{opacity:.35;cursor:default}
+.obcount{font-family:var(--label);font-size:13px;color:var(--muted);letter-spacing:.06em}
+.obnav{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.obghost{background:transparent;border:0;color:var(--muted);font-family:var(--label);font-size:15px;letter-spacing:.04em}
+.obdots{display:flex;gap:6px}.obdots i{width:7px;height:7px;border-radius:50%;background:var(--line)}.obdots i.on{background:var(--pylon);width:20px;border-radius:4px}
+.obagain{background:transparent;border:1px solid #ffffff2e;border-radius:6px;font-size:14px;padding:8px 10px;color:var(--sidefg);text-align:left;width:100%}
+#tourBtn{margin-top:auto;background:var(--pylon);border-color:var(--pylon);color:#fff}
+#obAgain{margin-top:6px}
+.obagain + .sidefoot{margin-top:8px}
+@media (prefers-reduced-motion:reduce){.obsvg .rush,.obsvg .zone,.obcard,.obs{animation:none}}
+@media (max-width:900px){.obagain{display:none}}
+@media (max-width:520px){.obnav{flex-wrap:wrap}.obdots{order:-1;width:100%;justify-content:center}.obcount{display:none}.obbtns{margin-left:auto}}
+
+/* ===== Responsive : les grilles se réorganisent selon la place réellement disponible ===== */
+.valid{grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+.valid>div,.valid>div:not(:last-child){border-right:0;border-bottom:1px solid var(--line)}
+.valid>div+div{box-shadow:inset 1px 0 0 var(--line)}
+.mini th,.mini td{white-space:normal;padding:5px 6px;font-size:12.5px}
+.mini th:first-child,.mini td:first-child{white-space:nowrap}
+.cardgrid{grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr))}
+.cardgrid .tile,.cardgrid .tile:not(:nth-child(3n)),.cardgrid .tile:nth-child(odd){border-right:0;border-bottom:1px solid var(--line);box-shadow:inset -1px 0 0 var(--line)}
+.takeaways{grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))}
+.takeaways li,.takeaways li:nth-child(odd){border-right:0;box-shadow:inset -1px 0 0 var(--line)}
+.ctxgrid{grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))}
+.hb{grid-template-columns:minmax(90px,150px) minmax(60px,1fr) minmax(80px,auto)}
+.hb>span:first-child{min-width:0;overflow-wrap:anywhere}
+.two{grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr))}
+.tile .val{font-size:clamp(28px,3vw,40px)}
+.gl2 b{font-size:clamp(26px,2.6vw,34px)}
+.reco-b .verb{font-size:clamp(28px,3.6vw,52px)}
+.win-b,.win{min-width:0}
+.tablewrap{overflow-x:auto;max-width:100%}
+@media (max-width:1240px){.s4,.s5,.s6,.s7,.s8{grid-column:span 12}.replay{grid-template-columns:minmax(0,1fr)}.playlist{max-height:280px}}
+@media (max-width:1240px) and (min-width:901px){.s5,.s7{grid-column:span 12}}
+@media (max-width:640px){.pagehead h1{font-size:34px}.cur{gap:12px}.curclock{font-size:44px}.toolbar .duel{width:100%}.toolbar .fld{flex:1 1 40%}.toolbar .fld select{width:100%}.player{width:100%}.pmeta{flex:1}.pmeta select{max-width:none;width:100%}}
+
+/* ===== Mode vidéo ===== */
+.tourstart{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:rgba(8,14,10,.6);padding:16px}
+.tsrow{display:flex;align-items:center;gap:10px;font-size:14px}
+.tsrow input[type=range]{flex:1;accent-color:var(--pylon)}
+main{transition:transform .9s cubic-bezier(.4,0,.2,1);transform-origin:0 0}
+.app.touring .content{overflow:hidden;height:100dvh}
+.app.touring{overflow:hidden;height:100dvh}
+.tcursor{position:fixed;left:0;top:0;z-index:60;width:30px;height:30px;pointer-events:none;transition:transform .8s cubic-bezier(.4,0,.2,1);filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))}
+.tcursor svg{width:30px;height:30px}
+.tcursor.click::after{content:"";position:absolute;left:-14px;top:-14px;width:32px;height:32px;border-radius:50%;border:3px solid var(--pylon);animation:ripple .5s ease-out}
+@keyframes ripple{from{transform:scale(.3);opacity:1}to{transform:scale(1.6);opacity:0}}
+.tsub{position:fixed;left:0;right:0;margin-inline:auto;width:fit-content;bottom:calc(36px + env(safe-area-inset-bottom,0px));z-index:55;max-width:min(860px,calc(100% - 32px));background:rgba(10,14,12,.86);color:#fff;font-family:var(--body);font-weight:600;font-size:clamp(17px,2.2vw,26px);line-height:1.3;text-align:center;padding:10px 20px;border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.35)}
+.tsub.pop{animation:subin .35s cubic-bezier(.2,.8,.2,1)}
+@keyframes subin{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
+.tcard{position:fixed;inset:0;z-index:58;display:grid;place-items:center;background:var(--bar);color:var(--barfg);text-align:center;animation:fadein .5s ease-out}
+.tcard>div{display:grid;gap:12px;justify-items:center;padding:24px}
+.tcard-k{font-family:var(--label);font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--pylon);font-size:15px}
+.tcard b{font-family:var(--display);font-weight:900;text-transform:uppercase;font-size:clamp(56px,11vw,140px);line-height:.9}
+.tcard span:last-child{font-size:clamp(16px,2vw,22px);color:var(--barmut);max-width:40ch}
+.tcount{position:fixed;inset:0;z-index:59;display:grid;place-items:center;background:var(--bar);color:var(--pylon);font-family:var(--mono);font-weight:700;font-size:160px}
+.tstop{position:fixed;right:max(12px,env(safe-area-inset-right,0px));top:calc(10px + env(safe-area-inset-top,0px));z-index:61;opacity:.25;font-size:12px}
+.tstop:hover{opacity:1}
+/* Un élément masqué reste masqué, quelle que soit sa mise en page (dernière règle, priorité maximale) */
+:root [hidden][hidden][hidden]{display:none!important}
+</style>
+
+<div class="app">
+  <aside class="side">
+    <div class="brand2"><span class="mark">PC</span><div><b>Pocket Clock</b><small>NFL · aide à la décision</small></div></div>
+    <nav class="tabs" id="tabs" aria-label="Navigation">
+      <span class="grp">Jour de match</span>
+      <button data-view="direct"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3" fill="currentColor"/><path d="M4.5 4.5a7.8 7.8 0 0 0 0 11M15.5 4.5a7.8 7.8 0 0 1 0 11"/></svg><span>Direct</span></button><button data-view="match" class="on"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="3.5"/><circle cx="10" cy="10" r=".8" fill="currentColor"/></svg><span>Plan de match</span></button><button data-view="bilan" id="tabBilan" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3h8v4a4 4 0 0 1-8 0zM10 11v4M7 17h6M6 5H3.5a2.5 2.5 0 0 0 2.6 3M14 5h2.5a2.5 2.5 0 0 1-2.6 3"/></svg><span>Bilan du match</span></button>
+      <span class="grp">Préparation</span>
+      <button data-view="rejeu"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M8.5 7v6l5-3z" fill="currentColor"/></svg><span>Rejeu</span></button><button data-view="joueurs"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="6.5" r="3"/><path d="M4 17c.8-3.2 3.2-5 6-5s5.2 1.8 6 5"/></svg><span>Joueurs</span></button><button data-view="equipes"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5l6 2.3v4.7c0 3.7-2.6 6.6-6 8-3.4-1.4-6-4.3-6-8V4.8z"/></svg><span>Équipes</span></button>
+      <span class="grp">Méthode</span>
+      <button data-view="analyse"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 17h14M5.5 14V9M10 14V5M14.5 14v-3"/></svg><span>Analyse</span></button><button data-view="fiabilite"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5l6 2.3v4.7c0 3.7-2.6 6.6-6 8-3.4-1.4-6-4.3-6-8V4.8z"/><path d="M7.2 10l2 2 3.8-4"/></svg><span>Fiabilité</span></button>
+    </nav>
+    <button class="obagain" id="tourBtn">▶ Mode vidéo</button>
+    <button class="obagain" id="obAgain">Présentation de l'app</button>
+    <p class="sidefoot">Saison 2021, semaines 1 à 8 · Next Gen Stats et PFF</p>
+  </aside>
+  <div class="content">
+  <header class="toolbar">
+    <div class="tb-row">
+      <div class="duel" role="group" aria-label="Duel">
+        <div class="seg"><button id="lDef" class="on">Je défends</button><button id="lOff">J'attaque</button></div>
+        <label class="fld"><span>Mon équipe</span><select id="lMe"></select></label>
+        <span class="vsx">vs</span>
+        <label class="fld"><span>Adversaire</span><select id="lOpp"></select></label>
+        <label class="fld"><span>Tentative</span><select id="lDown"><option value="1">1re</option><option value="2">2e</option><option value="3" selected>3e</option><option value="4">4e</option></select></label>
+        <label class="fld"><span>Distance</span><select id="lTogo"><option value="2">Courte 1–3</option><option value="5">Moyenne 4–7</option><option value="10" selected>Longue 8+</option></select></label>
+      </div>
+      <div class="player" role="group" aria-label="Lecteur du direct">
+        <button id="liveBtn" class="livebtn" aria-label="Lancer le direct">▶ Direct</button>
+        <div class="pmeta"><select id="liveGame" aria-label="Match à rejouer"></select><div class="lprog" aria-hidden="true"><i id="liveProg"></i></div></div>
+        <div class="seg sm" id="liveSpeed"><button data-s="0.5">×0.5</button><button data-s="1" class="on">×1</button><button data-s="2">×2</button><button data-s="4">×4</button></div>
+        <button id="livePrev" class="skip wide" aria-label="Action précédente" title="Action précédente (flèche gauche)">⏮ Précédente</button><button id="liveNext" class="skip wide" aria-label="Action suivante" title="Action suivante (flèche droite)">Suivante ⏭</button><button id="liveEnd" class="skip wide" aria-label="Aller à la fin du match" title="Aller à la fin du match">Fin</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+  <!-- ===== DIRECT : un vrai match rejoué action par action ===== -->
+  <section class="view grid" data-view="direct" hidden>
+    <div class="pagehead s12"><h1>Direct</h1><p>Rejeu d'un vrai match de 2021, action par action. La recommandation se met à jour avant chaque snap.</p></div>
+    <div class="win s12 scoreb">
+      <div class="win-b sb-in">
+        <div class="sb-team"><span id="sbAway" class="sb-abbr"></span><b id="sbAwayS" class="num">0</b></div>
+        <div class="sb-mid"><span class="livepill" id="livePill">Prêt</span><span id="sbClock" class="num"></span><span class="note" id="sbSub">Rejeu en direct d'un vrai match de la saison 2021, action par action</span></div>
+        <div class="sb-team r"><b id="sbHomeS" class="num">0</b><span id="sbHome" class="sb-abbr"></span></div>
+      </div>
+    </div>
+    <div id="alerts" class="s12 alerts"></div>
+    <div class="win s7 hot">
+      <div class="win-h"><span class="wt">Terrain en direct</span>
+        <div class="legend"><span><i style="background:var(--off)"></i>QB</span><span><i style="background:var(--block)"></i>Attaque</span><span><i style="background:var(--rush)"></i>Pass rush</span><span><i style="background:var(--def)"></i>Couverture</span></div></div>
+      <div class="win-b flush"><div class="fieldbox sq"><canvas id="lfield" width="1100" height="620" aria-label="Terrain en direct"></canvas>
+        <div class="hud"><div class="pc num" id="lpc">0,0 s</div><div class="st" id="lst">Avant le snap</div></div>
+        <div class="nofield" id="nofield" hidden>Terrain image par image disponible pour les 6 matchs ★. Ce match affiche le chrono et la courbe en direct.</div></div></div>
+    </div>
+    <div class="win s5">
+      <div class="win-h"><span class="wt">Action en cours</span><span class="wx" id="curSit"></span></div>
+      <div class="win-b">
+        <div class="cur"><div class="curclock num" id="curClock">0,0 s</div><div class="curstate"><span class="pill" id="curState">En attente</span><span class="note" id="curRush"></span></div></div>
+        <svg id="curSvg" viewBox="0 0 640 200" width="100%" role="img" aria-label="Distance du rusher le plus proche en direct"></svg>
+        <p class="desc" id="curDesc"></p>
+      </div>
+    </div>
+    <div class="win s5">
+      <div class="win-h"><span class="wt">Avant le snap · recommandation</span><span class="wx" id="preCtx"></span></div>
+      <div class="win-b"><div class="verb sm" id="preVerb">–</div><p class="why" id="preWhy"></p><span class="conf" id="preConf"></span></div>
+    </div>
+    <div class="win s7">
+      <div class="win-h"><span class="wt">Ce match contre la saison</span><span class="wx">poches percées avant le lancer</span></div>
+      <div class="win-b"><div id="gameCmp"></div><svg id="spark" viewBox="0 0 640 110" width="100%" role="img" aria-label="Pocket Clock de chaque action du match"></svg>
+        <p class="note">Chaque barre est une action : hauteur = tenue de la poche, orange = poche percée.</p></div>
+    </div>
+    <div class="win s12">
+      <div class="win-h"><span class="wt">Fil du match</span><span class="wx" id="feedCount"></span></div>
+      <div class="win-b flush"><ol class="feed" id="feed"></ol></div>
+    </div>
+  </section>
+
+  <!-- ===== BILAN du match rejoué ===== -->
+  <section class="view grid" data-view="bilan" hidden>
+    <div class="pagehead s12"><h1>Bilan du match</h1><p>Qui a gagné la bataille de la poche, et pourquoi.</p></div>
+    <div class="win s12 scoreb">
+      <div class="win-b sb-in">
+        <div class="sb-team"><span id="bAway" class="sb-abbr"></span><b id="bAwayS" class="num"></b></div>
+        <div class="sb-mid"><span class="livepill">Bilan</span><span class="note" id="bSub"></span>
+          <div class="controls" style="justify-content:center;margin:4px 0 0"><button id="bRelive" class="livebtn">↺ Revivre le match</button><select id="bGame" aria-label="Choisir un autre match"></select><button id="bGo">Lancer ce match</button></div></div>
+        <div class="sb-team r"><b id="bHomeS" class="num"></b><span id="bHome" class="sb-abbr"></span></div>
+      </div>
+    </div>
+    <div class="win s12"><div class="win-h"><span class="wt">Qui a gagné le duel de la poche ?</span></div><div class="win-b"><div class="verb sm" id="bVerdict"></div><p class="why" id="bWhy"></p></div></div>
+    <div class="win s6"><div class="win-h"><span class="wt">Les deux protections</span></div><div class="win-b flush"><div class="cardgrid" id="bTiles"></div></div></div>
+    <div class="win s6"><div class="win-h"><span class="wt">Toutes les actions du match</span></div><div class="win-b"><svg id="bSpark" viewBox="0 0 640 140" width="100%" role="img" aria-label="Pocket Clock de chaque action"></svg><p class="note">Hauteur : tenue de la poche. Orange : poche percée. Plein : équipe à domicile.</p></div></div>
+    <div class="win s6"><div class="win-h"><span class="wt">Les poches tombées le plus vite</span></div><div class="win-b flush"><ol class="feed" id="bFast"></ol></div></div>
+    <div class="win s6"><div class="win-h"><span class="wt">Moments clés et rushers du match</span></div><div class="win-b"><div id="bKeys"></div></div></div>
+  </section>
+
+  <!-- ===== MATCH : tout ce qu'il faut voir d'un coup d'œil ===== -->
+  <section class="view grid" data-view="match">
+    <div class="pagehead s12"><h1>Plan de match</h1><p>Une décision par situation : combien de rushers envoyer, ou s'il faut appeler le play action.</p></div>
+    <div class="win s8 hot">
+      <div class="win-h"><span class="wt">Plan de match</span><span class="wx" id="lCtx"></span></div>
+      <div class="win-b reco-b">
+        <div class="reco"><div class="verb" id="lVerb"></div><p class="why" id="lWhy"></p><span class="conf" id="lConf"></span></div>
+        <div class="tablewrap"><table class="opt" id="lTab"></table></div>
+        <p class="note" id="lNote"></p>
+      </div>
+    </div>
+    <div class="win s4">
+      <div class="win-h"><span class="wt">Repère NFL</span></div>
+      <div class="win-b glance">
+        <div><span class="lab">Tenue médiane d'une poche</span><div class="clockbig num" id="medBig">–</div></div>
+        <div class="gl2"><div class="clean"><span class="lab">Poche intacte</span><b class="num" id="sc"></b><span class="lab2">sacks</span><b class="num sm" id="cc"></b><span class="lab2">complètes</span></div>
+          <div class="breach"><span class="lab">Poche percée</span><b class="num" id="sb"></b><span class="lab2">sacks</span><b class="num sm" id="cb"></b><span class="lab2">complètes</span></div></div>
+        <p class="note" id="heroSub"></p>
+      </div>
+    </div>
+    <div class="win s7">
+      <div class="win-h"><span class="wt" id="cardTitle">Fiche adversaire</span><div class="seg sm"><button id="cOff" class="on">Attaque</button><button id="cDef">Défense</button></div></div>
+      <div class="win-b"><select id="cardTeam" aria-label="Équipe" hidden></select><div class="cardgrid" id="cardgrid"></div>
+        <p class="note">Rang sur 32 : vert = dans le top 8, rouge = dans les 8 derniers.</p></div>
+    </div>
+    <div class="win s5">
+      <div class="win-h"><span class="wt">Duel de poche</span></div>
+      <div class="win-b"><svg id="duel" viewBox="0 0 480 300" width="100%" role="img" aria-label="Duel de poche"></svg><p class="note" id="duelNote"></p></div>
+    </div>
+    <div class="win s12">
+      <div class="win-h"><span class="wt">Ce qu'un coach doit retenir</span></div>
+      <div class="win-b flush"><ol class="takeaways" id="take"></ol></div>
+    </div>
+  </section>
+
+  <!-- ===== REJEU ===== -->
+  <section class="view grid" data-view="rejeu" hidden>
+    <div class="pagehead s12"><h1>Rejeu</h1><p>Voir la poche se refermer, image par image.</p></div>
+    <div class="win s12">
+      <div class="win-h"><span class="wt">Rejeu : la poche qui se referme</span>
+        <div class="legend"><span><i style="background:var(--off)"></i>QB</span><span><i style="background:var(--block)"></i>Bloqueurs</span><span><i style="background:var(--rush)"></i>Pass rushers</span><span><i style="background:var(--def)"></i>Couverture</span></div></div>
+      <div class="win-b">
+        <div class="replay">
+          <div>
+            <div class="fieldbox"><canvas id="field" width="1100" height="560" aria-label="Rejeu de l'action"></canvas>
+              <div class="hud"><div class="pc num" id="pc">0.0</div><div class="st" id="st">Avant le snap</div></div></div>
+            <div class="controls"><button id="play" aria-label="Lecture">▶ Lecture</button>
+              <input type="range" id="scrub" min="0" max="10" value="0" aria-label="Image">
+              <div class="seg" id="speedSeg"><button data-s="0.5">×0.5</button><button data-s="1" class="on">×1</button><button data-s="2">×2</button></div>
+              <select id="speed" aria-label="Vitesse" hidden><option value="0.5">×0.5</option><option value="1" selected>×1</option><option value="2">×2</option></select></div>
+            <svg id="distSvg" viewBox="0 0 800 130" width="100%" role="img" aria-label="Distance du rusher le plus proche"></svg>
+            <p class="desc" id="desc"></p>
+          </div>
+          <div class="playlist" id="playlist"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== JOUEURS ===== -->
+  <section class="view grid" data-view="joueurs" hidden>
+    <div class="pagehead s12"><h1>Joueurs</h1><p>Les rushers qui créent la pression eux-mêmes, et les bloqueurs qui tiennent.</p></div>
+    <div class="win s12">
+      <div class="win-h"><span class="wt">Pass rushers : les premiers arrivés sur le QB</span><span class="wx">min. 120 snaps · clic sur une colonne pour trier</span></div>
+      <div class="win-b"><div class="tablewrap"><table id="rushT"></table></div></div>
+    </div>
+    <div class="win s12">
+      <div class="win-h"><span class="wt">Ligne offensive : les blocs qui tiennent</span><span class="wx">min. 150 snaps · défenseur assigné par PFF</span></div>
+      <div class="win-b"><div class="tablewrap"><table id="olT"></table></div></div>
+    </div>
+  </section>
+
+  <!-- ===== ÉQUIPES ===== -->
+  <section class="view grid" data-view="equipes" hidden>
+    <div class="pagehead s12"><h1>Équipes</h1><p>Les meilleures lignes gardent plus de 93 % de poches intactes à 2,5 s, les plus faibles 76 %.</p></div>
+    <div class="win s7">
+      <div class="win-h"><span class="wt" id="survTitle">Qui protège le mieux ?</span><div class="seg sm"><button id="vOff" class="on">Attaque</button><button id="vDef">Défense</button></div></div>
+      <div class="win-b"><div class="controls" style="margin:0"><select id="teamSel" aria-label="Équipe"></select><span class="note" id="teamNote"></span></div>
+        <svg id="surv" viewBox="0 0 640 340" width="100%" role="img" aria-label="Courbe de survie"></svg>
+        <p class="note">Part des poches encore intactes à chaque instant après le snap, estimée par Kaplan-Meier.</p></div>
+    </div>
+    <div class="win s5">
+      <div class="win-h"><span class="wt">Classement des 32 équipes</span></div>
+      <div class="win-b"><div class="tablewrap tall"><table id="teamT"></table></div></div>
+    </div>
+  </section>
+
+  <!-- ===== ANALYSE ===== -->
+  <section class="view grid" data-view="analyse" hidden>
+    <div class="pagehead s12"><h1>Analyse</h1><p>Le play action achète 1,3 s de poche ; chaque rusher ajouté par la défense en retire.</p></div>
+    <div class="win s5">
+      <div class="win-h"><span class="wt">Ce que vaut une demi-seconde</span></div>
+      <div class="win-b"><svg id="bk" viewBox="0 0 480 340" width="100%" role="img" aria-label="Issue par tranche"></svg>
+        <p class="note">Plus la poche casse tôt, plus le sack devient probable.</p></div>
+    </div>
+    <div class="win s7">
+      <div class="win-h"><span class="wt">Ce qui fait tenir ou tomber la poche</span><span class="wx">poches intactes à 2,5 s · tenue médiane</span></div>
+      <div class="win-b"><div class="ctxgrid" id="ctx"></div></div>
+    </div>
+    <div class="win s6">
+      <div class="win-h"><span class="wt">Fatigue : au fil des snaps</span></div>
+      <div class="win-b"><div id="fatSnap"></div><p class="note">Part des snaps où le rusher atteint la zone de 2 yards, selon le nombre de snaps déjà joués dans le match.</p></div>
+    </div>
+    <div class="win s6">
+      <div class="win-h"><span class="wt">Fatigue : par quart-temps</span></div>
+      <div class="win-b"><div id="fatQ"></div><p class="note">Aucune baisse visible. Les rushers qui cumulent le plus de snaps sont les titulaires d'élite, et les fins de match amènent des situations de passe évidentes : ces deux effets masquent une éventuelle fatigue.</p></div>
+    </div>
+  </section>
+
+  <!-- ===== FIABILITÉ ===== -->
+  <section class="view grid" data-view="fiabilite" id="fiab" hidden>
+    <div class="pagehead s12"><h1>Fiabilité</h1><p>Testé avant d'être cru : calibré sur des semaines jamais vues et couvert par 15 tests automatiques.</p></div>
+    <div class="win s12">
+      <div class="win-h"><span class="wt">Testé avant d'être cru</span><span class="wx">modèle entraîné semaines 1–6, évalué semaines 7–8</span></div>
+      <div class="win-b flush"><div class="valid" id="valid"></div></div>
+    </div>
+    <div class="win s12">
+      <div class="win-h"><span class="wt">Méthode et sources</span></div>
+      <div class="win-b"><p class="note">Pocket Clock = temps entre le snap et le premier instant où un joueur marqué « Pass Rush » par PFF est à moins de 2 yards du QB, à 10 images par seconde. Données : NFL Next Gen Stats pour le tracking, Pro Football Focus pour les rôles et les pressions, Big Data Bowl regional event. Calcul en Python : pocket_clock.py, model.py, validate.py, export.py.</p>
+        <p class="note" id="foot"></p></div>
+    </div>
+  </section>
+  </main>
+  </div>
+</div>
+<div class="obov" id="obOv" hidden role="dialog" aria-modal="true" aria-labelledby="obTitle">
+  <div class="obcard">
+    <div class="obslides">
+      <section class="obs" data-i="0">
+        <svg class="obsvg" viewBox="0 0 520 260" role="img" aria-label="Schéma de la poche autour du quarterback">
+  <rect width="520" height="260" rx="14" fill="#2f5a3e"/>
+  <g stroke="rgba(244,246,239,.25)" stroke-width="2"><line x1="90" y1="0" x2="90" y2="260"/><line x1="190" y1="0" x2="190" y2="260"/><line x1="390" y1="0" x2="390" y2="260"/><line x1="490" y1="0" x2="490" y2="260"/></g>
+  <line x1="290" y1="0" x2="290" y2="260" stroke="#5b8def" stroke-width="3"/>
+  <text x="296" y="20" fill="#cfe0ff" font-size="12" font-family="system-ui">ligne de mêlée</text>
+  <circle class="zone" cx="170" cy="130" r="46" fill="rgba(244,246,239,.12)" stroke="#f4f6ef" stroke-dasharray="6 5" stroke-width="2"/>
+  <circle cx="170" cy="130" r="15" fill="#2563eb" stroke="#fff" stroke-width="2"/><text x="170" y="135" fill="#fff" font-size="12" font-weight="700" text-anchor="middle" font-family="system-ui">QB</text>
+  <g fill="#7ea6e8" stroke="#fff" stroke-width="2"><circle cx="268" cy="70" r="12"/><circle cx="276" cy="100" r="12"/><circle cx="280" cy="130" r="12"/><circle cx="276" cy="160" r="12"/><circle cx="268" cy="190" r="12"/></g>
+  <g class="rush" fill="#e8590c" stroke="#fff" stroke-width="2"><circle cx="312" cy="62" r="12"/><circle cx="310" cy="110" r="12"/><circle cx="310" cy="150" r="12"/><circle cx="312" cy="198" r="12"/></g>
+  <text x="170" y="198" fill="#f4f6ef" font-size="12" text-anchor="middle" font-family="system-ui">la poche</text>
+  <text x="246" y="238" fill="#cfe0ff" font-size="12" text-anchor="middle" font-family="system-ui">ses protecteurs</text>
+  <text x="380" y="238" fill="#ffd2b8" font-size="12" text-anchor="middle" font-family="system-ui">les pass rushers</text>
+</svg>
+        <span class="obk">1 · C'est quoi la poche ?</span>
+        <h2 id="obTitle">Un bouclier humain autour du lanceur</h2>
+        <p>Au football américain, le <b>quarterback</b> (QB) est le joueur qui lance le ballon. Pendant qu'il cherche à qui passer, ses coéquipiers forment un mur autour de lui : c'est la <b>poche</b>. En face, des défenseurs, les <b>pass rushers</b>, foncent pour percer ce mur et plaquer le QB avant qu'il lance.</p>
+      </section>
+      <section class="obs" data-i="1" hidden>
+        <span class="obk">2 · Le problème</span>
+        <h2>Tout se joue en trois secondes</h2>
+        <div class="obstats"><div><b class="ok">0,3 %</b><span>de sacks quand la poche tient</span></div><div><b class="ko">19 %</b><span>de sacks quand elle est percée</span></div></div>
+        <p>Un <b>sack</b>, c'est le QB plaqué avec le ballon : l'équipe recule et perd souvent l'action. Tout le monde sait que le temps compte, mais personne ne le mesurait précisément, action par action.</p>
+      </section>
+      <section class="obs" data-i="2" hidden>
+        <span class="obk">3 · Notre réponse</span>
+        <h2>Un chronomètre de la poche</h2>
+        <div class="obclock num">3,7 s</div>
+        <p>Grâce aux capteurs placés sur chaque joueur, mesurés 10 fois par seconde, <b>Pocket Clock</b> chronomètre le moment exact où un défenseur arrive à moins de 2 yards du QB, soit à peu près la longueur d'un bras. En NFL, une poche tient <b>3,7 secondes</b> en médiane.</p>
+      </section>
+      <section class="obs" data-i="3" hidden>
+        <span class="obk">4 · Ce que l'app fait pour un coach</span>
+        <h2>Voir, décider, réagir</h2>
+        <ul class="obfeat">
+          <li><b>Direct</b><span>Un vrai match rejoué action par action, avec des alertes quand une protection craque.</span></li>
+          <li><b>Plan de match</b><span>Combien de défenseurs envoyer, ou s'il faut tenter une feinte de course : la réponse selon l'adversaire et la situation.</span></li>
+          <li><b>Bilan</b><span>Qui a gagné la bataille de la poche, et grâce à quels joueurs.</span></li>
+          <li><b>Joueurs et équipes</b><span>Les défenseurs qui arrivent en premier, les protecteurs qui tiennent.</span></li>
+        </ul>
+      </section>
+    </div>
+    <div class="obnav">
+      <button id="obSkip" class="obghost">Passer</button>
+      <div class="obdots" id="obDots"><i class="on"></i><i></i><i></i><i></i></div><span class="obcount" id="obCount">1 / 4</span>
+      <div class="obbtns"><button id="obPrev" class="obprev">← Précédent</button><button id="obNext" class="livebtn">Suivant →</button></div>
+    </div>
+  </div>
+</div>
+<div class="tourstart" id="tourStart" hidden role="dialog" aria-modal="true" aria-labelledby="tsTitle">
+  <div class="obcard">
+    <span class="obk">Mode vidéo</span>
+    <h2 id="tsTitle">Démo automatique de l'app</h2>
+    <p>La démo dure environ 80 secondes : la souris parcourt l'app, avec zooms, sous-titres et musique en fond. Lance ton enregistrement d'écran, puis clique sur « Lancer ». Un compte à rebours de 3 secondes te laisse le temps de te placer.</p>
+    <label class="tsrow" for="tsVol">Volume de la musique <input type="range" id="tsVol" min="0" max="100" value="30"></label>
+    <label class="tsrow" for="tsSubs"><input type="checkbox" id="tsSubs" checked> Afficher les sous-titres</label>
+    <div class="obnav"><button id="tsCancel" class="obghost">Annuler</button><button id="tsGo" class="livebtn">Lancer ▶</button></div>
+  </div>
+</div>
+<div class="tcount" id="tCount" hidden></div>
+<div class="tcursor" id="tCursor" hidden><svg viewBox="0 0 24 24"><path d="M4 2l15 9-6.5 1.5L16 20l-3 1.5-3.5-7.5L4 18z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg></div>
+<div class="tsub" id="tSub" hidden></div>
+<div class="tcard" id="tCard" hidden><div><span class="tcard-k" id="tCardK"></span><b id="tCardT"></b><span id="tCardS"></span></div></div>
+<button class="tstop" id="tStop" hidden>■ Arrêter la démo</button>
+<audio id="tMusic" src="music.mp3" preload="auto"></audio>
+<div class="endov" id="endOv" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle">
+  <div class="endcard">
+    <svg class="ball" viewBox="0 0 120 70" aria-hidden="true"><ellipse cx="60" cy="35" rx="56" ry="31" fill="#8a4b22"/><path d="M30 35h60" stroke="#fff" stroke-width="3"/><path d="M42 29v12M50 29v12M58 29v12M66 29v12M74 29v12" stroke="#fff" stroke-width="3"/><path d="M14 22c10 4 10 22 0 26M106 22c-10 4-10 22 0 26" stroke="#fff" stroke-width="3" fill="none"/></svg>
+    <span class="final">Final</span>
+    <div class="endscore"><span id="eAway"></span><b id="eAwayS" class="num"></b><i>–</i><b id="eHomeS" class="num"></b><span id="eHome"></span></div>
+    <h2 id="endTitle">Match terminé</h2>
+    <p class="note" id="endSub"></p>
+    <div class="controls" style="justify-content:center"><button id="eBilan" class="livebtn">Voir le bilan du match</button><button id="eRelive">↺ Revivre le match</button></div>
+  </div>
+</div>
+
+<script>
+const D = /*DATA*/null;
+const $ = id => document.getElementById(id);
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const fr = n => n.toFixed(1).replace('.', ',');
+const pct = n => fr(n) + ' %';
+const k = D.kpi;
+$('medBig').innerHTML = fr(k.median) + '<small>s</small>';
+$('heroSub').textContent = `${k.plays.toLocaleString('fr-FR')} actions de passe chronométrées sur ${k.games} matchs. ${fr(k.breach)} % des poches sont percées avant le lancer.`;
+$('cc').textContent = pct(k.compClean); $('sc').textContent = pct(k.sackClean);
+$('cb').textContent = pct(k.compBreach); $('sb').textContent = pct(k.sackBreach);
+function safe(where, fn){ try{ fn(); }catch(e){ console.error(where, e); } }
+const RES = {C:'Complète',I:'Incomplète',S:'Sack',IN:'Interception',R:'Scramble'};
+
+/* ---------- Rejeu ---------- */
+const cv = $('field'), ctx = cv.getContext('2d');
+let cur = null, fi = 0, playing = false, last = 0, acc = 0;
+function view(play){
+  // cadre : autour de la ligne de mêlée
+  const all = play.frames.flat().filter(p=>p[2]!=='B'||true);
+  const xs = play.frames[0].map(p=>p[0]);
+  const los = play.frames[0].find(p=>p[2]==='B')?.[0] ?? xs.reduce((a,b)=>a+b)/xs.length;
+  return {x0: los - 25, x1: los + 30, los};
+}
+function draw(){
+  if(!cur) return;
+  const W = cv.width, H = cv.height, v = cur.v, sx = W/(v.x1-v.x0), sy = H/53.3;
+  const X = x => (x - v.x0)*sx, Y = y => H - y*sy;
+  ctx.fillStyle = css('--turf'); ctx.fillRect(0,0,W,H);
+  for(let yd = Math.ceil(v.x0/5)*5; yd <= v.x1; yd += 5){
+    if(((yd/5)|0)%2){ ctx.fillStyle = css('--turf2'); ctx.fillRect(X(yd),0,5*sx,H); }
+  }
+  ctx.strokeStyle = 'rgba(244,246,239,.35)'; ctx.lineWidth = 2;
+  ctx.font = '600 22px "Barlow Condensed", sans-serif'; ctx.fillStyle = 'rgba(244,246,239,.45)'; ctx.textAlign='center';
+  for(let yd = Math.ceil(v.x0/5)*5; yd <= v.x1; yd += 5){
+    ctx.beginPath(); ctx.moveTo(X(yd),0); ctx.lineTo(X(yd),H); ctx.stroke();
+    const lab = yd-10; if(lab>0 && lab<100 && lab%10===0){ const n = lab<=50?lab:100-lab; ctx.fillText(n, X(yd), H-18); ctx.fillText(n, X(yd), 34);}
+  }
+  ctx.strokeStyle = 'rgba(30,110,220,.85)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(X(v.los),0); ctx.lineTo(X(v.los),H); ctx.stroke();
+  const pts = cur.frames[fi], qb = pts.find(p=>p[2]==='Q');
+  const t = (fi - cur.snapIdx)/10;
+  const hitNow = cur.breached && t >= cur.pocket - 1e-6;
+  if(qb){
+    ctx.beginPath(); ctx.arc(X(qb[0]),Y(qb[1]),2*sx,0,7);
+    ctx.fillStyle = hitNow ? 'rgba(232,89,12,.35)' : 'rgba(244,246,239,.14)'; ctx.fill();
+    ctx.setLineDash([6,5]); ctx.strokeStyle = hitNow ? '#e8590c' : 'rgba(244,246,239,.8)'; ctx.lineWidth=2; ctx.stroke(); ctx.setLineDash([]);
+  }
+  const col = {Q:css('--off'),K:css('--block'),R:css('--rush'),D:css('--def'),O:css('--block')};
+  for(const p of pts){
+    if(p[2]==='B'){ ctx.fillStyle='#8a5a2b'; ctx.beginPath(); ctx.ellipse(X(p[0]),Y(p[1]),9,6,0,0,7); ctx.fill(); ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.stroke(); continue; }
+    const r = p[2]==='Q'?15:12;
+    ctx.beginPath(); ctx.arc(X(p[0]),Y(p[1]),r,0,7); ctx.fillStyle = col[p[2]]||'#999'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.stroke();
+    ctx.fillStyle='#fff'; ctx.font='700 13px "JetBrains Mono", monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(p[3], X(p[0]), Y(p[1])+1); ctx.textBaseline='alphabetic';
+  }
+  const pc = $('pc');
+  const shown = Math.max(0, Math.min(t, cur.breached ? cur.pocket : cur.release));
+  pc.textContent = (t<0? '0,0' : fr(shown)) + ' s';
+  pc.classList.toggle('hit', hitNow);
+  $('st').textContent = t<0 ? 'Avant le snap' : hitNow ? 'Poche percée' : t >= cur.release ? 'Ballon lâché' : 'Poche intacte';
+  $('scrub').value = fi;
+  drawDist();
+}
+function drawDist(){
+  const s = $('distSvg'), c = cur.curve, n = c.length, W=800, H=130, L=40, R=10, T=10, B=24;
+  const max = 10, x = i => L + (W-L-R)*i/Math.max(1,(n-1)), y = d => T + (H-T-B)*(1-Math.min(d,max)/max);
+  let h = `<line class="ax" x1="${L}" x2="${W-R}" y1="${y(2)}" y2="${y(2)}" stroke-dasharray="4 4" stroke="${css('--pylon')}"/>`;
+  h += `<text x="${L-6}" y="${y(2)+4}" text-anchor="end">2 yd</text><text x="${L-6}" y="${y(10)+4}" text-anchor="end">10 yd</text>`;
+  for(let i=0;i<n;i+=10) h += `<text x="${x(i)}" y="${H-6}" text-anchor="middle">${i/10} s</text>`;
+  h += `<path d="${c.map((d,i)=>(i?'L':'M')+x(i).toFixed(1)+','+y(d).toFixed(1)).join('')}" fill="none" stroke="${css('--ink')}" stroke-width="2.5"/>`;
+  const ci = fi - cur.snapIdx;
+  if(ci>=0 && ci<n) h += `<circle cx="${x(ci)}" cy="${y(c[ci])}" r="5" fill="${css('--pylon')}"/>`;
+  h += `<text x="${W-R}" y="${T+10}" text-anchor="end">Distance rusher le plus proche ↔ QB</text>`;
+  s.innerHTML = h;
+}
+function load(i){
+  const p = D.replays[i]; cur = p; cur.v = view(p); fi = 0; playing=false; $('play').textContent='▶ Lecture';
+  $('scrub').max = p.frames.length-1;
+  document.querySelectorAll('.pl').forEach((b,j)=>b.classList.toggle('on', j===i));
+  $('desc').textContent = `${p.off} contre ${p.def} · semaine ${p.week}, Q${p.q}, ${p.down}e & ${p.togo} · couverture ${p.coverage||'n.c.'} — ${p.desc}`;
+  draw();
+}
+function tick(ts){
+  if(playing){
+    acc += (ts-last)*(+$('speed').value); last = ts;
+    while(acc >= 100){ acc -= 100; fi++; if(fi >= cur.frames.length){ fi = cur.frames.length-1; playing=false; $('play').textContent='↺ Revoir'; break; } }
+    draw();
+  }
+  requestAnimationFrame(tick);
+}
+$('play').onclick = () => { if(fi >= cur.frames.length-1) fi = 0; playing = !playing; last = performance.now(); acc=0; $('play').textContent = playing?'❚❚ Pause':'▶ Lecture'; };
+$('scrub').oninput = e => { fi = +e.target.value; playing=false; $('play').textContent='▶ Lecture'; draw(); };
+$('playlist').innerHTML = D.replays.map((p,i)=>`<button class="pl" data-i="${i}"><span class="t num" style="color:${p.breached?'var(--bad)':'var(--good)'}">${fr(p.breached?p.pocket:p.release)}s</span><span class="m"><b>${p.off} – ${p.def}</b><span class="chip ${p.result}">${RES[p.result]}</span><br><span class="muted">${p.breached? 'Percée par '+(p.first||'?') : 'Poche intacte jusqu’au lancer'}</span></span></button>`).join('');
+document.querySelectorAll('.pl').forEach(b=>b.onclick=()=>{ load(+b.dataset.i); playing=true; last=performance.now(); acc=0; $('play').textContent='❚❚ Pause'; });
+requestAnimationFrame(tick); safe('field', ()=>load(0));
+
+/* ---------- Survie ---------- */
+let side = 'offense';
+function fillTeams(){
+  const list = D[side]; const sel = $('teamSel');
+  sel.innerHTML = list.map(t=>`<option value="${t.team}">${t.team}</option>`).join('');
+  sel.value = list[0].team; drawSurv();
+}
+function drawSurv(){
+  const list = D[side], team = list.find(t=>t.team===$('teamSel').value), worst = list[list.length-1], best = list[0];
+  const W=640,H=340,L=46,R=16,T=14,B=34, g=D.grid, xmax=5;
+  const x = t => L + (W-L-R)*t/xmax, y = v => T + (H-T-B)*(1-v/100);
+  let h='';
+  for(const v of [0,25,50,75,100]) h += `<line class="ax" x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L-8}" y="${y(v)+4}" text-anchor="end">${v} %</text>`;
+  for(let t=0;t<=xmax;t++) h += `<text x="${x(t)}" y="${H-10}" text-anchor="middle">${t} s</text>`;
+  const path = (c,stroke,w,dash) => `<path d="${g.filter(t=>t<=xmax).map((t,i)=>(i?'L':'M')+x(t).toFixed(1)+','+y(c[i]).toFixed(1)).join('')}" fill="none" stroke="${stroke}" stroke-width="${w}" ${dash?'stroke-dasharray="5 5"':''}/>`;
+  h += `<line x1="${x(2.5)}" x2="${x(2.5)}" y1="${T}" y2="${H-B}" stroke="${css('--line')}" stroke-dasharray="3 4"/><text x="${x(2.5)+6}" y="${T+12}">2,5 s</text>`;
+  h += path(D.overall, css('--muted'), 2, true);
+  h += path(team.curve, css('--pylon'), 3.5);
+  const i25 = 25; h += `<circle cx="${x(2.5)}" cy="${y(team.curve[i25])}" r="5" fill="${css('--pylon')}"/><text x="${x(2.5)+8}" y="${y(team.curve[i25])-8}" style="fill:${css('--ink')};font-weight:700;font-size:14px">${team.team} · ${fr(team.curve[i25])} %</text>`;
+  h += `<text x="${x(xmax)}" y="${y(D.overall[40])-8}" text-anchor="end">moyenne NFL</text>`;
+  $('surv').innerHTML = h;
+  const rank = list.indexOf(team)+1;
+  $('teamNote').textContent = side==='offense'
+    ? `${rank}e sur ${list.length} : à 2,5 s, ${fr(team.intact25)} % des poches de ${team.team} tiennent encore.`
+    : `${rank}e sur ${list.length} en résistance… autrement dit ${list.length-rank+1}e pour faire tomber la poche : à 2,5 s, ${fr(100-team.intact25)} % des poches adverses ont déjà cédé.`;
+  $('survTitle').textContent = side==='offense' ? 'Qui protège le mieux ?' : 'Qui fait tomber la poche ?';
+}
+$('teamSel').onchange = drawSurv;
+$('vOff').onclick = ()=>{side='offense';$('vOff').classList.add('on');$('vDef').classList.remove('on');fillTeams();};
+$('vDef').onclick = ()=>{side='defense';$('vDef').classList.add('on');$('vOff').classList.remove('on');D.defense.sort((a,b)=>a.intact25-b.intact25);fillTeams();};
+
+/* ---------- Demi-secondes ---------- */
+function drawBk(){
+  const b = [...D.buckets.slice(1), D.buckets[0]];
+  const W=480,H=340,L=40,R=10,T=14,B=56, bw=(W-L-R)/b.length, y=v=>T+(H-T-B)*(1-v/100);
+  let h='';
+  for(const v of [0,25,50,75]) h += `<line class="ax" x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end">${v} %</text>`;
+  b.forEach((d,i)=>{
+    const x0 = L + i*bw + 4, w = (bw-8)/2;
+    h += `<rect x="${x0}" y="${y(d.comp)}" width="${w}" height="${y(0)-y(d.comp)}" fill="${css('--good')}"><title>${d.bucket} : ${fr(d.comp)} % complètes (${d.n} actions)</title></rect>`;
+    h += `<rect x="${x0+w}" y="${y(d.sack)}" width="${w}" height="${y(0)-y(d.sack)}" fill="${css('--bad')}"><title>${d.bucket} : ${fr(d.sack)} % de sacks</title></rect>`;
+    const lab = d.bucket==='Poche intacte' ? ['Intacte',''] : d.bucket.split(' ');
+    h += `<text x="${x0+w}" y="${H-B+18}" text-anchor="middle" style="font-size:11px">${lab[0]}</text><text x="${x0+w}" y="${H-B+32}" text-anchor="middle" style="font-size:11px">${lab[1]||''}</text>`;
+  });
+  h += `<text x="${L}" y="${H-6}">Moment où la poche cède →</text>`;
+  h += `<rect x="${W-170}" y="${T}" width="10" height="10" fill="${css('--good')}"/><text x="${W-155}" y="${T+9}">complètes</text><rect x="${W-90}" y="${T}" width="10" height="10" fill="${css('--bad')}"/><text x="${W-75}" y="${T+9}">sacks</text>`;
+  $('bk').innerHTML = h;
+}
+
+/* ---------- Tables ---------- */
+function table(el, cols, rows, key, desc=true){
+  const st = {key, desc};
+  const render = () => {
+    const r = [...rows].sort((a,b)=>{const A=a[st.key]??-1,B=b[st.key]??-1; return (typeof A==='string'? A.localeCompare(B) : A-B)*(st.desc?-1:1);});
+    const maxv = Math.max(...rows.map(x=>x[cols.find(c=>c.bar)?.k]||0));
+    el.innerHTML = `<thead><tr><th>#</th>${cols.map(c=>`<th data-k="${c.k}" class="${c.k===st.key?'sorted':''}">${c.h}${c.k===st.key?(st.desc?' ↓':' ↑'):''}</th>`).join('')}</tr></thead><tbody>${r.slice(0,el.id==='teamT'?40:25).map((x,i)=>`<tr><td class="num muted">${i+1}</td>${cols.map(c=>`<td class="${c.cls||''}">${c.bar?`<span class="bar" style="width:${(x[c.k]/maxv*60).toFixed(0)}px"></span>`:''}${c.f?c.f(x[c.k],x):x[c.k]??'–'}</td>`).join('')}</tr>`).join('')}</tbody>`;
+    el.querySelectorAll('th[data-k]').forEach(th=>th.onclick=()=>{ if(st.key===th.dataset.k) st.desc=!st.desc; else {st.key=th.dataset.k; st.desc=true;} render(); });
+  };
+  render();
+}
+safe('rushT', ()=>table($('rushT'), [
+  {k:'name',h:'Joueur',cls:'name',f:(v,x)=>`${v} <span class="muted">${x.pos}</span>`},
+  {k:'team',h:'Équipe'},
+  {k:'snaps',h:'Snaps'},
+  {k:'firstInRate',h:'Premier arrivé',bar:true,f:v=>pct(v)},
+  {k:'getThere',h:'Arrive sur le QB',f:v=>pct(v)},
+  {k:'arrival',h:'Temps médian',f:v=>v==null?'–':fr(v)+' s'},
+  {k:'sacks',h:'Sacks (PFF)'},
+  {k:'pressures',h:'Pressions (PFF)'}], D.rushers, 'firstInRate'));
+safe('teamT', ()=>{ const T = D.offense.map(o=>{const d=D.defense.find(x=>x.team===o.team); return {team:o.team, oInt:o.intact25, oMed:o.median, oSack:o.sack, dBreak:+(100-d.intact25).toFixed(1), dMed:d.median, dSack:d.sack};});
+table($('teamT'), [
+  {k:'team',h:'Équipe',cls:'name'},
+  {k:'oInt',h:'Att. : poche intacte à 2,5 s',bar:true,f:v=>pct(v)},
+  {k:'oMed',h:'Att. : tenue médiane',f:v=>v==null?'> 6 s':fr(v)+' s'},
+  {k:'oSack',h:'Att. : sacks subis',f:v=>pct(v)},
+  {k:'dBreak',h:'Déf. : poche percée à 2,5 s',f:v=>pct(v)},
+  {k:'dSack',h:'Déf. : sacks réussis',f:v=>pct(v)}], T, 'oInt'); });
+safe('surv', fillTeams); safe('bk', drawBk);
+
+/* ---------- Plan de match en direct ---------- */
+const M = D.model, V = D.validation || null;
+const expit = z => 1/(1+Math.exp(-z));
+function pBreach(off, def, r, pa, down, togo){
+  const c = M.coef, nr = Math.min(Math.max(r,3),6);
+  return expit(c.const + c.pa*pa + c.late*(down>=3?1:0) + c.long*(togo>=8?1:0) + (c['r'+nr]||0) + (c['o_'+off]||0) + (c['d_'+def]||0));
+}
+function expect(off, def, r, pa, down, togo){
+  const sit = `${down>=3?1:0}${togo>=8?1:0}`, p = pBreach(off, def, r, pa, down, togo), b = M.outcomes[`1_${r}_${pa}_${sit}`], c = M.outcomes[`0_${r}_${pa}_${sit}`];
+  return {p, yards: p*b.yards+(1-p)*c.yards, sack: p*b.sack+(1-p)*c.sack, comp: p*b.comp+(1-p)*c.comp, n: b.n + c.n};
+}
+let lSide = 'def';
+const RL = {3:'3 rushers',4:'4 rushers',5:'5 rushers',6:'6+ (blitz)'};
+function liveDraw(){
+  const me = $('lMe').value, opp = $('lOpp').value, down = +$('lDown').value, togo = +$('lTogo').value;
+  const situ = `${down===1?'1re':down+'e'} tentative, ${togo<=3?'courte':togo<=7?'moyenne':'longue'} distance`;
+  let opts;
+  if(lSide==='def'){
+    // Je défends : l'adversaire attaque. Il choisit lui-même le play action : on pondère par sa fréquence réelle.
+    const paw = (M.paUse[opp]||25)/100;
+    opts = [3,4,5,6].map(r=>{
+      const a = expect(opp, me, r, 0, down, togo), b = expect(opp, me, r, 1, down, togo);
+      const mix = k => a[k]*(1-paw) + b[k]*paw;
+      return {key:r, label:RL[r], p:mix('p'), yards:mix('yards'), sack:mix('sack'), comp:mix('comp'), used:M.usage[me][r], n:a.n+b.n};
+    });
+    opts.sort((x,y)=>x.yards-y.yards);
+  } else {
+    // J'attaque : l'adversaire choisit son nombre de rushers, pondéré par ses habitudes réelles.
+    const use = M.usage[opp], tot = Object.values(use).reduce((a,b)=>a+b,0);
+    opts = [0,1].map(pa=>{
+      const acc = {p:0,yards:0,sack:0,comp:0,n:0};
+      for(const r of [3,4,5,6]){ const w = use[r]/tot, e = expect(me, opp, r, pa, down, togo); for(const k of ['p','yards','sack','comp']) acc[k] += w*e[k]; acc.n += e.n; }
+      return {key:pa, label: pa? 'Avec play action':'Sans play action', ...acc};
+    });
+    opts.sort((x,y)=>y.yards-x.yards);
+  }
+  const best = opts[0], second = opts[1], gap = Math.abs(best.yards-second.yards);
+  $('lCtx').textContent = `${me} ${lSide==='def'?'en défense contre':'en attaque contre'} ${opp} · ${situ}`;
+  if(lSide==='def'){
+    $('lVerb').textContent = best.key===6 ? 'Blitz à 6 ou plus' : `Envoie ${best.label}`;
+    $('lWhy').innerHTML = `Avec ${best.label}, la poche de ${opp} est percée dans <b>${pct(best.p*100)}</b> des cas, pour <b>${fr(best.yards)} yards</b> concédés en moyenne et <b>${pct(best.sack*100)}</b> de sacks. C'est <b>${fr(gap)} yard${gap>=2?'s':''}</b> de moins que l'option suivante : ${second.label}.`;
+  } else {
+    $('lVerb').textContent = best.key ? 'Appelle le play action' : 'Passe sans play action';
+    $('lWhy').innerHTML = `Face aux habitudes de rush de ${opp}, ta poche est percée dans <b>${pct(best.p*100)}</b> des cas ${best.key?'avec':'sans'} play action, contre ${pct(second.p*100)} ${best.key?'sans':'avec'}. Gain attendu : <b>${fr(best.yards)} yards</b> par action, ${fr(gap)} de plus.`;
+  }
+  const conf = $('lConf');
+  if(best.n < 30){ conf.className='conf mid'; conf.textContent=`Peu observé dans cette situation : ${best.n} actions`; }
+  else if(gap >= 0.5){ conf.className='conf hi'; conf.textContent='Écart net entre les options'; }
+  else { conf.className='conf mid'; conf.textContent='Options proches : choisis selon ton personnel'; }
+  const cols = lSide==='def'
+    ? ['Option','Poche percée','Sacks','Passes complètes','Yards concédés', `Utilisé par ${me}`, 'Actions de référence']
+    : ['Option','Poche percée','Sacks subis','Passes complètes','Yards gagnés','Actions de référence'];
+  $('lTab').innerHTML = `<thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${opts.map((o,i)=>`<tr class="${i===0?'best':''}"><td class="name">${i===0?'★ ':''}${o.label}</td><td>${pct(o.p*100)}</td><td>${pct(o.sack*100)}</td><td>${pct(o.comp*100)}</td><td class="${i===0?'best':''}">${fr(o.yards)}</td>${lSide==='def'?`<td>${o.used} snaps</td>`:''}<td>${o.n}</td></tr>`).join('')}</tbody>`;
+  $('lNote').textContent = lSide==='def'
+    ? `Classement par yards concédés attendus, sacks compris. Plus de rushers fait tomber la poche plus vite, mais laisse moins de défenseurs en couverture : le modèle pèse les deux. Le play action de ${opp} est pris en compte à sa fréquence réelle (${fr(M.paUse[opp])} %).`
+    : `Classement par yards gagnés attendus, sacks compris. Le nombre de rushers de ${opp} est pondéré par ses habitudes réelles sur la saison. Le play action ressort gagnant contre les 32 défenses de l'échantillon : ce qui change d'un adversaire à l'autre, c'est le temps de poche qu'il te laisse.`;
+}
+safe('live', ()=>{
+  const teams = Object.keys(M.usage).sort();
+  for(const id of ['lMe','lOpp']) $(id).innerHTML = teams.map(t=>`<option>${t}</option>`).join('');
+  $('lMe').value = 'KC'; $('lOpp').value = 'BUF';
+  for(const id of ['lMe','lOpp','lDown','lTogo']) $(id).onchange = liveDraw;
+  $('lDef').onclick = ()=>{lSide='def';$('lDef').classList.add('on');$('lOff').classList.remove('on');liveDraw();};
+  $('lOff').onclick = ()=>{lSide='off';$('lOff').classList.add('on');$('lDef').classList.remove('on');liveDraw();};
+  liveDraw();
+});
+
+/* ---------- Fiabilité ---------- */
+safe('valid', ()=>{
+  if(!V){ $('fiab').hidden = true; return; }
+  const h = V.holdout, s = V.sensitivity, v = V.value;
+  $('valid').innerHTML = `
+  <div><h3>Prédiction hors échantillon</h3><span class="big num">Bien calibré</span>
+    <p class="note">Sur ${h.test_plays.toLocaleString('fr-FR')} actions des semaines 7 et 8 jamais vues, le modèle fait mieux que la moyenne de la ligue (score de Brier −${fr(h.gain_brier_pct)} %, AUC ${h.auc.toFixed(2).replace('.',',')}). Une action isolée reste très incertaine : le modèle sert à comparer des options, pas à prédire chaque snap.</p>
+    <div class="tablewrap"><table class="mini"><thead><tr><th>Annoncé</th><th>Observé</th><th>Actions</th></tr></thead><tbody>${V.calibration.map(c=>`<tr><td>${pct(c.pred)}</td><td>${pct(c.obs)}</td><td>${c.n}</td></tr>`).join('')}</tbody></table></div>
+    <p class="note">Calibration : quand le modèle annonce X % de poches percées, on en observe bien environ X %.</p></div>
+  <div><h3>Seuil de 2 yards</h3><span class="big num">2 yards</span>
+    <div class="tablewrap"><table class="mini"><thead><tr><th>Rayon</th><th>Percées</th><th>Corrél. équipes</th><th>Top 10 rushers</th></tr></thead><tbody>${s.map(x=>`<tr><td>${fr(x.radius)} yd</td><td>${pct(x.breach)}</td><td>${x.team_spearman.toFixed(2).replace('.',',')}</td><td>${x.rusher_top10_overlap}/10</td></tr>`).join('')}</tbody></table></div>
+    <p class="note">Entre 1,5 et 2 yards, les classements restent proches. Au-delà, la majorité des poches comptent comme « percées » alors que le rusher est simplement au contact d'un bloqueur : la mesure ne distingue plus rien. 2 yards est le seuil le plus large qui garde un vrai signal.</p></div>
+  <div><h3>Valeur d'une poche</h3><span class="big num">${fr(v.yards_lost)} yards</span>
+    <p class="note">C'est ce que coûte une poche percée par action : ${fr(v.yards_clean)} yards en moyenne quand elle tient, ${fr(v.yards_breach)} quand elle casse. Parmi les poches percées, chaque demi-seconde de protection en plus réduit le risque de sack d'environ ${fr(Math.abs(v.sack_pts_per_half_second))} points.</p>
+    <p class="note">Code : 15 tests automatiques vérifient le chrono sur des actions dont on connaît la réponse (arrivée du rusher, poche intacte, sack, rien avant le snap ni après le lancer, rayon modifiable) et le modèle (Kaplan-Meier, effet d'équipe retrouvé, équipe peu observée ramenée vers la moyenne).</p></div>`;
+});
+
+/* ---------- À retenir ---------- */
+safe('take', ()=>{
+  const c = D.context, pa = c['Play action'], ru = c['Rushers envoyés'];
+  const ol = D.oline[0], rr = D.rushers[0];
+  const best = D.offense[0], worst = D.offense[D.offense.length-1];
+  $('take').innerHTML = [
+    `<b>La poche tient ${fr(k.median)} s en médiane.</b> À 2,5 s après le snap, ${fr(100-D.overall[25])} % des poches sont déjà percées : c'est le moment où le QB doit avoir lâché le ballon.`,
+    `<b>Une poche percée change tout.</b> Le sack passe de ${fr(k.sackClean)} % à ${fr(k.sackBreach)} % et les passes complètes chutent de ${fr(k.compClean)} % à ${fr(k.compBreach)} %. Chaque dixième de seconde de protection vaut de l'or.`,
+    `<b>Le play action achète du temps :</b> ${fr(pa[1].median-pa[0].median)} s de poche en plus en médiane. En défense, passer de 4 à 5 rushers retire ${fr(ru[1].median-ru[2].median)} s au QB, le blitz à 6+ en retire ${fr(ru[1].median-ru[3].median)} s.`,
+    `<b>Qui protège, qui attaque :</b> ${best.team} garde ${fr(best.intact25)} % de poches intactes à 2,5 s contre ${fr(worst.intact25)} % pour ${worst.team}. ${rr.name} est le premier sur le QB dans ${fr(rr.firstInRate)} % de ses snaps, ${ol.name} tient son bloc ${fr(ol.hold)} % du temps.`
+  ].map(x=>`<li>${x}</li>`).join('');
+});
+
+/* ---------- Fiche équipe ---------- */
+let cSide = 'offense';
+const METRICS = {
+  offense: [
+    {k:'intact25', h:'Poche intacte à 2,5 s', f:v=>pct(v), better:'high', ex:'Plus c’est haut, mieux la ligne protège'},
+    {k:'median', h:'Tenue médiane de la poche', f:v=>v>=6?'> 6 s':fr(v)+' s', better:'high', ex:'Moitié des poches percées avant ce temps'},
+    {k:'ttt', h:'Temps avant le lancer', f:v=>fr(v)+' s', better:'low', ex:'Médiane sur les passes lancées'},
+    {k:'margin', h:'Marge du QB', f:v=>(v>0?'+':'')+fr(v)+' s', better:'high', ex:'Temps de poche restant au moment du lancer'},
+    {k:'pressure', h:'Pression subie', f:v=>pct(v), better:'low', ex:'Snaps avec hit, hurry ou sack (PFF)'},
+    {k:'q4', h:'Évolution au 4e quart', f:v=>v==null?'–':(v>0?'+':'')+fr(v)+' pts', better:'high', ex:'Poche intacte à 2,5 s, Q4 vs Q1–Q3'}],
+  defense: [
+    {k:'intact25', h:'Poche adverse intacte à 2,5 s', f:v=>pct(v), better:'low', ex:'Plus c’est bas, plus le front est dangereux'},
+    {k:'median', h:'Tenue médiane adverse', f:v=>v>=6?'> 6 s':fr(v)+' s', better:'low', ex:'Le temps laissé au QB adverse'},
+    {k:'ttt', h:'Temps avant le lancer adverse', f:v=>fr(v)+' s', better:'low', ex:'Force le QB à lancer vite'},
+    {k:'pressure', h:'Taux de pression', f:v=>pct(v), better:'high', ex:'Snaps avec hit, hurry ou sack (PFF)'},
+    {k:'sack', h:'Taux de sacks', f:v=>pct(v), better:'high', ex:'Part des dropbacks finis en sack'},
+    {k:'q4', h:'Évolution au 4e quart', f:v=>v==null?'–':(v>0?'+':'')+fr(v)+' pts', better:'low', ex:'Poche adverse intacte, Q4 vs Q1–Q3'}]
+};
+function drawCard(){
+  const list = D.cards[cSide], t = list.find(x=>x.team===$('cardTeam').value) || list[0];
+  $('cardgrid').innerHTML = METRICS[cSide].map(m=>{
+    const vals = list.filter(x=>x[m.k]!=null).map(x=>x[m.k]).sort((a,b)=>m.better==='high'?b-a:a-b);
+    const r = t[m.k]==null ? null : vals.indexOf(t[m.k])+1, n = vals.length;
+    const cls = r==null?'mid': r<=8?'top': r>n-8?'low':'mid';
+    return `<div class="tile"><span class="lab">${m.h}</span><span class="val num">${m.f(t[m.k])}</span><span class="rk ${cls}">${r==null?'–':r+'e / '+n}</span><span class="ex">${m.ex}</span></div>`;
+  }).join('');
+}
+safe('card', ()=>{
+  const teams = D.cards.offense.map(x=>x.team).sort();
+  $('cardTeam').innerHTML = teams.map(x=>`<option>${x}</option>`).join('');
+  $('cardTeam').value = 'KC'; $('cardTeam').onchange = drawCard;
+  $('cOff').onclick = ()=>{cSide='offense';$('cOff').classList.add('on');$('cDef').classList.remove('on');drawCard();};
+  $('cDef').onclick = ()=>{cSide='defense';$('cDef').classList.add('on');$('cOff').classList.remove('on');drawCard();};
+  drawCard();
+});
+
+/* ---------- Contexte tactique ---------- */
+safe('ctx', ()=>{
+  $('ctx').innerHTML = Object.entries(D.context).map(([title, rows])=>`<div class="ctx"><h3>${title}</h3>${rows.map(r=>`<div class="hb"><span>${r.label} <small class="muted">(${r.n})</small></span><span class="tr"><i style="width:${Math.max(0,(r.intact25-60)/40*100).toFixed(0)}%"></i></span><span class="v">${pct(r.intact25)} <small>${r.median==null?'':fr(r.median)+' s'}</small></span></div>`).join('')}</div>`).join('')
+    + `<p class="note" style="grid-column:1/-1">Barres sur une échelle de 60 à 100 %. Le play action fait gagner 1,3 s de poche en médiane. Chaque rusher ajouté coûte du temps : de 5,7 s à 3 rushers à 3,0 s en blitz.</p>`;
+});
+
+/* ---------- Fatigue ---------- */
+function bars(el, rows, lab){
+  $(el).innerHTML = rows.map(r=>`<div class="hb"><span>${lab(r)} <small class="muted">(${r.n.toLocaleString('fr-FR')})</small></span><span class="tr"><i style="width:${(r.rate/25*100).toFixed(0)}%"></i></span><span class="v">${fr(r.rate)} % <small>${fr(r.arrival)} s</small></span></div>`).join('');
+}
+safe('fat', ()=>{ bars('fatSnap', D.fatigueSnap, r=>'Snaps '+r.label); bars('fatQ', D.fatigueQ, r=>r.label==='Q4'?'Q4 et prol.':r.label); });
+
+/* ---------- Ligne offensive ---------- */
+safe('olT', ()=>table($('olT'), [
+  {k:'name',h:'Joueur',cls:'name',f:(v,x)=>`${v} <span class="muted">${x.pos}</span>`},
+  {k:'team',h:'Équipe'},
+  {k:'snaps',h:'Snaps'},
+  {k:'hold',h:'Bloc tenu',bar:true,f:v=>pct(v)},
+  {k:'beaten',h:'Battu (PFF)',f:v=>pct(v)},
+  {k:'sacks',h:'Sacks concédés'},
+  {k:'hits',h:'Hits concédés'},
+  {k:'hurries',h:'Hurries concédés'}], D.oline, 'hold'));
+safe('foot',()=>$('foot').textContent = `Pocket Clock = temps entre le snap et le premier instant où un joueur marqué « Pass Rush » par PFF est à moins de 2 yards du QB, mesuré à 10 images/s. ${k.plays.toLocaleString('fr-FR')} actions analysées.`);
+const mq = matchMedia('(prefers-color-scheme: dark)'); (mq.addEventListener? mq.addEventListener('change',()=>{draw();drawSurv();drawBk();}):0);
+/* ===== Coque d'application : onglets, duel global, vitesse ===== */
+const VIEWS = ['direct','match','rejeu','joueurs','equipes','analyse','fiabilite','bilan'];
+function show(v){
+  if(!VIEWS.includes(v)) v = 'match';
+  document.querySelectorAll('section.view').forEach(sec=>sec.hidden = sec.dataset.view !== v);
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on', b.dataset.view===v));
+  try{ if(location.hash.slice(1)!==v) history.replaceState(null,'','#'+v); }catch(e){}
+  if(v==='rejeu') safe('field', draw);
+  try{ window.scrollTo({top:0}); }catch(e){}
+}
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>show(b.dataset.view));
+show(location.hash.slice(1));
+
+document.querySelectorAll('#speedSeg button').forEach(b=>b.onclick=()=>{
+  $('speed').value = b.dataset.s; document.querySelectorAll('#speedSeg button').forEach(x=>x.classList.toggle('on', x===b));
+});
+
+function drawDuel(){
+  const me = $('lMe').value, opp = $('lOpp').value;
+  const att = lSide==='def' ? opp : me, def = lSide==='def' ? me : opp;
+  const o = D.offense.find(t=>t.team===att), d = D.defense.find(t=>t.team===def);
+  const W=480,H=300,L=44,R=12,T=12,B=30,g=D.grid,xmax=5, x=t=>L+(W-L-R)*t/xmax, y=v=>T+(H-T-B)*(1-v/100);
+  let h='';
+  for(const v of [0,25,50,75,100]) h += `<line class="ax" x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end">${v} %</text>`;
+  for(let t=0;t<=xmax;t++) h += `<text x="${x(t)}" y="${H-8}" text-anchor="middle">${t} s</text>`;
+  const path=(c,st,w,dash)=>`<path d="${g.filter(t=>t<=xmax).map((t,i)=>(i?'L':'M')+x(t).toFixed(1)+','+y(c[i]).toFixed(1)).join('')}" fill="none" stroke="${st}" stroke-width="${w}" ${dash?'stroke-dasharray="5 5"':''}/>`;
+  h += `<line x1="${x(2.5)}" x2="${x(2.5)}" y1="${T}" y2="${H-B}" stroke="${css('--line')}" stroke-dasharray="3 4"/>`;
+  h += path(D.overall, css('--muted'), 1.5, true) + path(o.curve, css('--off'), 3) + path(d.curve, css('--def'), 3);
+  h += `<circle cx="${x(2.5)}" cy="${y(o.curve[25])}" r="4.5" fill="${css('--off')}"/><circle cx="${x(2.5)}" cy="${y(d.curve[25])}" r="4.5" fill="${css('--def')}"/>`;
+  h += `<rect x="${L+8}" y="${y(100)+8}" width="10" height="3" fill="${css('--off')}"/><text x="${L+22}" y="${y(100)+13}">Protection ${att}</text>`;
+  h += `<rect x="${L+8}" y="${y(100)+24}" width="10" height="3" fill="${css('--def')}"/><text x="${L+22}" y="${y(100)+29}">Pass rush ${def}</text>`;
+  h += `<rect x="${L+8}" y="${y(100)+40}" width="10" height="2" fill="${css('--muted')}"/><text x="${L+22}" y="${y(100)+45}">Moyenne NFL</text>`;
+  $('duel').innerHTML = h;
+  const diff = o.curve[25] - d.curve[25];
+  $('duelNote').innerHTML = `À 2,5 s, ${att} garde <b>${pct(o.curve[25])}</b> de poches intactes ; la défense de ${def} en laisse <b>${pct(d.curve[25])}</b> à ses adversaires. ` +
+    (Math.abs(diff) < 2 ? 'Duel équilibré.' : diff > 0 ? `Avantage protection : ${att}.` : `Avantage pass rush : ${def}.`);
+}
+function syncAll(){
+  safe('live', liveDraw);
+  safe('card', ()=>{
+    cSide = lSide==='def' ? 'offense' : 'defense';
+    $('cOff').classList.toggle('on', cSide==='offense'); $('cDef').classList.toggle('on', cSide==='defense');
+    $('cardTeam').value = $('lOpp').value; drawCard();
+    $('cardTitle').textContent = `Fiche adversaire · ${$('lOpp').value} ${cSide==='offense'?'en attaque':'en défense'}`;
+  });
+  safe('duel', drawDuel);
+  safe('surv', ()=>{ side = lSide==='def' ? 'offense' : 'defense'; if(side==='defense') D.defense.sort((a,b)=>a.intact25-b.intact25); $('vOff').classList.toggle('on', side==='offense'); $('vDef').classList.toggle('on', side==='defense');
+    fillTeams(); $('teamSel').value = $('lOpp').value; drawSurv(); });
+}
+for(const id of ['lMe','lOpp','lDown','lTogo']) $(id).onchange = syncAll;
+$('lDef').onclick = ()=>{lSide='def';$('lDef').classList.add('on');$('lOff').classList.remove('on');syncAll();};
+$('lOff').onclick = ()=>{lSide='off';$('lOff').classList.add('on');$('lDef').classList.remove('on');syncAll();};
+$('cOff').onclick = ()=>{cSide='offense';$('cOff').classList.add('on');$('cDef').classList.remove('on');drawCard();$('cardTitle').textContent=`Fiche adversaire · ${$('lOpp').value} en attaque`;};
+$('cDef').onclick = ()=>{cSide='defense';$('cDef').classList.add('on');$('cOff').classList.remove('on');drawCard();$('cardTitle').textContent=`Fiche adversaire · ${$('lOpp').value} en défense`;};
+syncAll();
+/* ===== DIRECT : rejeu d'un vrai match, action par action ===== */
+const LV = D.live, GIDS = Object.keys(LV).sort();
+const SEASON = Object.fromEntries(D.offense.map(t=>[t.team, t.breach]));
+let G=null, gi=0, lf=0, phase='idle', running=false, lspeed=1, lacc=0, llast=0, ST=null;
+const PRE=1200, POST=1700;
+safe('liveInit', ()=>{
+  $('liveGame').innerHTML = GIDS.map(g=>`<option value="${g}">S${LV[g].week} · ${LV[g].away} @ ${LV[g].home}</option>`).join('');
+  const pref = GIDS.find(g=>[LV[g].home,LV[g].away].includes('KC') && [LV[g].home,LV[g].away].includes('BUF')) || GIDS.find(g=>[LV[g].home,LV[g].away].includes('KC')) || GIDS[0];
+  $('liveGame').value = pref;
+  $('liveGame').onchange = ()=>{ resetGame($('liveGame').value); if(!running) setRun(false); };
+  document.querySelectorAll('#liveSpeed button').forEach(b=>b.onclick=()=>{ lspeed=+b.dataset.s; document.querySelectorAll('#liveSpeed button').forEach(x=>x.classList.toggle('on',x===b)); });
+  $('liveBtn').onclick = ()=>{ if(!G || (phase==='end')) resetGame($('liveGame').value); setRun(!running); if(running) show('direct'); };
+  resetGame(pref);
+  requestAnimationFrame(tick2);
+});
+function setRun(on){
+  running = on; llast = performance.now(); lacc = 0;
+  $('liveBtn').textContent = on ? '❚❚ Pause' : (phase==='end' ? '↺ Rejouer' : '▶ Direct');
+  $('liveBtn').classList.toggle('on', on);
+  const pill = $('livePill'); pill.classList.toggle('on', on);
+  pill.textContent = on ? '● En direct' : (phase==='end' ? 'Match terminé' : (gi>0||lf>0 ? 'En pause' : 'Prêt'));
+}
+function togoVal(t){ return t<=3 ? '2' : t<=7 ? '5' : '10'; }
+function resetGame(gid){
+  G = LV[gid]; gi = 0; lf = 0; phase = 'pre'; lacc = 0;
+  ST = {team:{}, first:{}, done:[], alerts:new Set()};
+  for(const t of [G.home, G.away]) ST.team[t] = {n:0, br:0, sack:0};
+  const me = $('lMe').value;
+  if(![G.home,G.away].includes(me)) $('lMe').value = G.home;
+  $('lOpp').value = $('lMe').value===G.home ? G.away : G.home;
+  $('sbHome').textContent = G.home; $('sbAway').textContent = G.away;
+  $('feed').innerHTML = ''; $('alerts').innerHTML = ''; $('feedCount').textContent = '';
+  prepare(0); drawSpark(); drawCmp();
+  $('liveProg').style.width = '0%';
+}
+function prepare(i){
+  const p = G.plays[i], me = $('lMe').value;
+  const off = p[0]==me;
+  lSide = off ? 'off' : 'def';
+  $('lDef').classList.toggle('on', !off); $('lOff').classList.toggle('on', off);
+  $('lDown').value = String(Math.min(p[4],4)); $('lTogo').value = togoVal(p[5]);
+  syncAll();
+  $('preVerb').textContent = $('lVerb').textContent; $('preWhy').innerHTML = $('lWhy').innerHTML;
+  $('preConf').className = $('lConf').className; $('preConf').textContent = $('lConf').textContent;
+  $('preCtx').textContent = `${me} ${off?'en attaque':'en défense'}`;
+  $('curSit').textContent = `Q${p[2]} · ${p[3]} · ${p[4]===1?'1re':p[4]+'e'} & ${p[5]} · ${p[0]} attaque`;
+  $('sbHomeS').textContent = p[16]; $('sbAwayS').textContent = p[17];
+  $('sbClock').textContent = `Q${p[2]} · ${p[3]}`;
+  $('curClock').textContent = '0,0 s'; $('curClock').classList.remove('hit');
+  $('curState').className = 'pill'; $('curState').textContent = 'Snap imminent';
+  $('curRush').textContent = `${p[12]} rushers ${p[13]?'· play action':''}`; $('curDesc').textContent = '';
+  lf = 0; drawCur();
+}
+function drawCur(){
+  const p = G.plays[gi], c = p[14], W=640,H=160,L=40,R=10,T=10,B=22, n=Math.max(c.length,40), max=10;
+  const x=i=>L+(W-L-R)*i/(n-1), y=d=>T+(H-T-B)*(1-Math.min(d,max)/max);
+  let h = `<line x1="${L}" x2="${W-R}" y1="${y(2)}" y2="${y(2)}" stroke="${css('--pylon')}" stroke-dasharray="4 4"/><text x="${L-6}" y="${y(2)+4}" text-anchor="end">2 yd</text><text x="${L-6}" y="${y(10)+4}" text-anchor="end">10 yd</text>`;
+  for(let i=0;i<n;i+=10) h += `<text x="${x(i)}" y="${H-5}" text-anchor="middle">${i/10} s</text>`;
+  const k = Math.min(lf, c.length);
+  if(k>1) h += `<path d="${c.slice(0,k).map((d,i)=>(i?'L':'M')+x(i).toFixed(1)+','+y(d).toFixed(1)).join('')}" fill="none" stroke="${css('--ink')}" stroke-width="2.5"/>`;
+  if(k>0) h += `<circle cx="${x(k-1)}" cy="${y(c[k-1])}" r="5" fill="${css('--pylon')}"/>`;
+  $('curSvg').innerHTML = h;
+}
+function step(){
+  const p = G.plays[gi], c = p[14], t = lf/10, stopAt = p[9] ? p[8] : p[10];
+  $('curClock').textContent = fr(Math.min(t, stopAt)) + ' s';
+  if(p[9] && t >= p[8]){ $('curClock').classList.add('hit'); $('curState').className='pill hit'; $('curState').textContent='Poche percée'; if(p[11]) $('curRush').textContent = `par ${p[11]}`; }
+  else { $('curState').className='pill ok'; $('curState').textContent='Poche intacte'; }
+  drawCur();
+}
+const RESF = {C:'Complète',I:'Incomplète',S:'Sack',IN:'Interception',R:'Scramble'};
+function finish(){
+  const p = G.plays[gi];
+  $('curState').className = 'pill ' + (p[9]?'hit':'ok');
+  $('curState').textContent = (p[9]?'Percée à ':'Lancer à ') + fr(p[9]?p[8]:p[10]) + ' s · ' + RESF[p[6]];
+  $('curDesc').textContent = p[15];
+  const t = ST.team[p[0]]; if(t){ t.n++; t.br += p[9]; t.sack += p[6]==='S'; }
+  if(p[9] && p[11]) ST.first[p[11]] = (ST.first[p[11]]||0)+1;
+  ST.done.push(p);
+  const li = document.createElement('li'); li.className='new';
+  li.innerHTML = `<span class="t" style="color:${p[9]?'var(--bad)':'var(--good)'}">${fr(p[9]?p[8]:p[10])}s</span><span><b>Q${p[2]} ${p[0]}</b><span class="chip ${p[6]}">${RESF[p[6]]}</span> ${p[7]} yd${p[9]&&p[11]?' · '+p[11]:''}</span>`;
+  $('feed').prepend(li);
+  $('feedCount').textContent = `${ST.done.length} / ${G.plays.length} actions`;
+  $('liveProg').style.width = (ST.done.length/G.plays.length*100).toFixed(1)+'%';
+  drawSpark(); drawCmp(); checkAlerts(p);
+}
+function drawCmp(){
+  $('gameCmp').innerHTML = [G.away, G.home].map(tm=>{
+    const t = ST.team[tm], r = t.n ? t.br/t.n*100 : 0, se = SEASON[tm] ?? 32;
+    return `<div class="cmp"><b>${tm}</b><span class="tr"><i style="width:${Math.min(r,100)}%"></i><s style="left:${Math.min(se,100)}%" title="saison"></s></span><span class="num">${t.n? pct(r)+' sur '+t.n : '–'} <small class="muted">· saison ${pct(se)}</small></span></div>`;
+  }).join('') + `<p class="note">Barre : ce match. Trait noir : moyenne de la saison.</p>`;
+}
+function drawSpark(){
+  const W=640,H=110,n=G.plays.length,bw=(W-10)/n;
+  let h = `<line x1="0" x2="${W}" y1="${H-14}" y2="${H-14}" stroke="${css('--line')}"/>`;
+  ST.done.forEach((p,i)=>{ const v = Math.min(p[9]?p[8]:p[10],6), hh=(H-24)*v/6;
+    h += `<rect x="${5+i*bw}" y="${H-14-hh}" width="${Math.max(bw-1,1)}" height="${hh}" fill="${p[9]?css('--pylon'):css('--muted')}" opacity="${p[0]===G.home?1:.55}"><title>Q${p[2]} ${p[0]} : ${fr(v)} s</title></rect>`; });
+  for(const q of [1,2,3,4]){ const i = G.plays.findIndex(p=>p[2]===q); if(i>=0) h += `<text x="${5+i*bw}" y="${H-2}">Q${q}</text>`; }
+  $('spark').innerHTML = h;
+}
+function addAlert(key, cls, title, text){
+  if(ST.alerts.has(key)) return; ST.alerts.add(key);
+  const d = document.createElement('div'); d.className = `win alert pop ${cls}`;
+  d.innerHTML = `<div class="win-h"><span class="wt">${cls==='good'?'Point fort':'Alerte'} · Q${G.plays[gi][2]} ${G.plays[gi][3]}</span><button class="x" aria-label="Fermer">×</button></div><div class="win-b"><b class="h">${title}</b><p class="note">${text}</p></div>`;
+  d.querySelector('.x').onclick = ()=>d.remove();
+  $('alerts').prepend(d);
+  while($('alerts').children.length > 3) $('alerts').lastElementChild.remove();
+}
+function checkAlerts(p){
+  for(const tm of [G.home, G.away]){
+    const t = ST.team[tm], se = SEASON[tm] ?? 32; if(t.n < 8) continue;
+    const r = t.br/t.n*100, opp = tm===G.home ? G.away : G.home;
+    if(r - se >= 12) addAlert('bad'+tm, '', `La ligne de ${tm} craque`, `${pct(r)} de poches percées ce match contre ${pct(se)} en saison. ${tm} : jeu rapide, play action, un bloqueur de plus. ${opp} : continuer à presser.`);
+    if(se - r >= 12) addAlert('good'+tm, 'good', `La protection de ${tm} tient`, `${pct(r)} de poches percées seulement, contre ${pct(se)} en saison. ${opp} doit changer d'approche : plus de rushers ou des stunts.`);
+  }
+  if(p[9] && p[11]){ const c = ST.first[p[11]];
+    if(c===2 || c===4) addAlert('r'+p[11]+c, '', `${p[11]} arrive en premier · ${c} fois`, `Il perce la poche plus vite que tout le monde. Prévoir une aide sur son côté : chip du running back ou glissement de protection.`); }
+  if(p[6]==='S'){ const sk = ST.team[p[0]].sack; if(sk===2 || sk===3) addAlert('s'+p[0]+sk, '', `${sk} sacks subis par ${p[0]}`, `Le QB garde trop le ballon face à cette pression : réduire le temps de lancer.`); }
+}
+function tick2(ts){
+  if(running && G){
+    lacc += (ts-llast)*lspeed; llast = ts;
+    let guard = 0;
+    while(guard++ < 50){
+      if(phase==='pre'){ if(lacc < PRE) break; lacc -= PRE; phase='snap'; lf=0; }
+      else if(phase==='snap'){ if(lacc < 100) break; lacc -= 100; lf++; step(); if(lf >= G.plays[gi][14].length){ finish(); phase='post'; } }
+      else if(phase==='post'){ if(lacc < POST) break; lacc -= POST; gi++; if(gi >= G.plays.length){ gi = G.plays.length-1; phase='end'; setRun(false); endGame(); break; } phase='pre'; prepare(gi); }
+      else break;
+    }
+  } else llast = ts;
+  requestAnimationFrame(tick2);
+}
+/* ===== Fin du match : animation, confirmation, bilan ===== */
+function playThrough(){
+  // Traite instantanément les actions restantes (bouton Fin).
+  if(!G) resetGame($('liveGame').value);
+  if(phase==='end') return;
+  if(phase==='snap' || phase==='pre'){ lf = G.plays[gi][14].length; step(); finish(); }
+  for(gi = gi+1; gi < G.plays.length; gi++){ prepare(gi); lf = G.plays[gi][14].length; step(); finish(); }
+  gi = G.plays.length-1; phase='end'; setRun(false); endGame();
+}
+function lastScore(){ const p = G.plays[G.plays.length-1]; return {home:p[16], away:p[17]}; }
+function endGame(){
+  const sc = lastScore();
+  $('eHome').textContent = G.home; $('eAway').textContent = G.away; $('eHomeS').textContent = sc.home; $('eAwayS').textContent = sc.away;
+  $('endSub').textContent = `${G.plays.length} actions de passe chronométrées. Score au dernier snap de passe enregistré.`;
+  $('endOv').hidden = false; $('eBilan').focus();
+}
+function closeEnd(){ $('endOv').hidden = true; }
+function gameStats(tm){
+  const ps = ST.done.filter(p=>p[0]===tm), n = ps.length || 1;
+  const br = ps.filter(p=>p[9]).length, sacks = ps.filter(p=>p[6]==='S').length;
+  const times = ps.map(p=>p[9]?p[8]:p[10]).sort((a,b)=>a-b);
+  return {n:ps.length, rate: br/n*100, sacks, med: times.length ? times[Math.floor(times.length/2)] : 0,
+          yards: ps.reduce((a,p)=>a+p[7],0)/n, season: SEASON[tm] ?? 32};
+}
+function buildBilan(){
+  const sc = lastScore(), A = gameStats(G.away), H = gameStats(G.home);
+  $('bHome').textContent = G.home; $('bAway').textContent = G.away; $('bHomeS').textContent = sc.home; $('bAwayS').textContent = sc.away;
+  $('bSub').textContent = `Semaine ${G.week} · ${ST.done.length} actions de passe`;
+  const better = A.rate < H.rate ? G.away : G.home, worse = better===G.away ? G.home : G.away;
+  const bs = better===G.away ? A : H, ws = better===G.away ? H : A;
+  $('bVerdict').textContent = Math.abs(A.rate-H.rate) < 5 ? 'Duel équilibré' : `${better} a gagné la bataille de la poche`;
+  $('bWhy').innerHTML = `${better} n'a laissé percer que <b>${pct(bs.rate)}</b> de ses poches, contre <b>${pct(ws.rate)}</b> pour ${worse}. ` +
+    `${worse} a subi ${ws.sacks} sack${ws.sacks>1?'s':''} et gagné ${fr(ws.yards)} yards par passe, contre ${fr(bs.yards)} pour ${better}.`;
+  const tile = (lab, v, sub, cls='') => `<div class="tile"><span class="lab">${lab}</span><span class="val num ${cls}">${v}</span><span class="ex">${sub}</span></div>`;
+  $('bTiles').innerHTML = [[G.away,A],[G.home,H]].map(([tm,x])=>
+      tile(`${tm} · poches percées`, pct(x.rate), `saison : ${pct(x.season)}`) +
+      tile(`${tm} · tenue médiane`, fr(x.med)+' s', `${x.n} actions`) +
+      tile(`${tm} · sacks subis`, x.sacks, `${fr(x.yards)} yards par passe`)).join('');
+  // toutes les actions
+  const W=640,Hh=140,n=ST.done.length,bw=(W-10)/Math.max(n,1);
+  let h = `<line x1="0" x2="${W}" y1="${Hh-16}" y2="${Hh-16}" stroke="${css('--line')}"/>`;
+  ST.done.forEach((p,i)=>{ const v=Math.min(p[9]?p[8]:p[10],6), hh=(Hh-26)*v/6;
+    h += `<rect x="${5+i*bw}" y="${Hh-16-hh}" width="${Math.max(bw-1,1)}" height="${hh}" fill="${p[9]?css('--pylon'):css('--muted')}" opacity="${p[0]===G.home?1:.5}"><title>Q${p[2]} ${p[0]} : ${fr(v)} s</title></rect>`; });
+  for(const q of [1,2,3,4]){ const i = ST.done.findIndex(p=>p[2]===q); if(i>=0) h += `<text x="${5+i*bw}" y="${Hh-3}">Q${q}</text>`; }
+  $('bSpark').innerHTML = h;
+  // poches les plus rapides
+  const fast = ST.done.filter(p=>p[9]).sort((a,b)=>a[8]-b[8]).slice(0,6);
+  $('bFast').innerHTML = fast.length ? fast.map(p=>`<li><span class="t" style="color:var(--bad)">${fr(p[8])}s</span><span><b>Q${p[2]} ${p[3]} · ${p[0]}</b><span class="chip ${p[6]}">${RESF[p[6]]}</span>${p[11]?' · percée par '+p[11]:''}<br><span class="muted">${p[15]}</span></span></li>`).join('') : '<li><span></span><span class="muted">Aucune poche percée dans ce match.</span></li>';
+  // rushers et alertes
+  const top = Object.entries(ST.first).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  $('bKeys').innerHTML = (top.length ? `<div class="ctx"><h3>Premiers arrivés sur le QB</h3>${top.map(([nm,c])=>`<div class="hb"><span>${nm}</span><span class="tr"><i style="width:${c/top[0][1]*100}%"></i></span><span class="v">${c} fois</span></div>`).join('')}</div>` : '')
+    + `<div class="ctx" style="margin-top:14px"><h3>Alertes déclenchées</h3>${ST.alerts.size ? [...$('alerts').querySelectorAll('.alert b.h')].map(b=>`<p class="note">• ${b.textContent}</p>`).join('') + (ST.alerts.size>3?`<p class="note">et ${ST.alerts.size-3} autre${ST.alerts.size-3>1?'s':''} plus tôt dans le match</p>`:'') : '<p class="note">Aucune : les deux protections sont restées proches de leur niveau de saison.</p>'}</div>`;
+  $('bGame').innerHTML = $('liveGame').innerHTML; $('bGame').value = $('liveGame').value;
+  $('tabBilan').hidden = false;
+}
+function relive(gid){ closeEnd(); $('liveGame').value = gid; resetGame(gid); show('direct'); setRun(true); }
+safe('endInit', ()=>{
+  $('liveEnd').onclick = ()=>{ show('direct'); playThrough(); };
+  $('eBilan').onclick = ()=>{ closeEnd(); buildBilan(); show('bilan'); };
+  $('eRelive').onclick = ()=>relive($('liveGame').value);
+  $('bRelive').onclick = ()=>relive($('liveGame').value);
+  $('bGo').onclick = ()=>relive($('bGame').value);
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !$('endOv').hidden){ closeEnd(); buildBilan(); show('bilan'); } });
+});
+/* ===== Terrain en direct ===== */
+const lcv = $('lfield'), lctx = lcv.getContext('2d');
+function liveFieldIndex(){
+  // index d'image dans les données de terrain : 5 images avant le snap, puis lf images après
+  return phase==='pre' ? 5 : 5 + lf;
+}
+function drawLiveField(){
+  const F = G && G.field ? G.field[gi] : null;
+  $('nofield').hidden = !!F;
+  const W = lcv.width, H = lcv.height;
+  if(!F){ lctx.fillStyle = css('--turf'); lctx.fillRect(0,0,W,H); $('lpc').textContent = $('curClock').textContent; $('lst').textContent = $('curState').textContent; return; }
+  const n = F.e.length, fi = Math.min(liveFieldIndex(), F.f.length-1), row = F.f[fi];
+  const xs = []; for(let i=0;i<n;i++) if(F.e[i][0]!=='B') xs.push(F.f[0][2*i]/10);
+  const bi = F.e.findIndex(e=>e[0]==='B'), los = bi>=0 ? F.f[0][2*bi]/10 : xs.reduce((a,b)=>a+b,0)/xs.length;
+  const x0 = los-22, x1 = los+22, sx = W/(x1-x0), sy = H/53.3, X = x=>(x-x0)*sx, Y = y=>H-y*sy;
+  lctx.fillStyle = css('--turf'); lctx.fillRect(0,0,W,H);
+  for(let yd=Math.ceil(x0/5)*5; yd<=x1; yd+=5){ if(((yd/5)|0)%2){ lctx.fillStyle = css('--turf2'); lctx.fillRect(X(yd),0,5*sx,H); } }
+  lctx.strokeStyle='rgba(244,246,239,.35)'; lctx.lineWidth=2; lctx.font='600 24px system-ui, sans-serif'; lctx.fillStyle='rgba(244,246,239,.45)'; lctx.textAlign='center';
+  for(let yd=Math.ceil(x0/5)*5; yd<=x1; yd+=5){ lctx.beginPath(); lctx.moveTo(X(yd),0); lctx.lineTo(X(yd),H); lctx.stroke();
+    const lab=yd-10; if(lab>0&&lab<100&&lab%10===0){ const v=lab<=50?lab:100-lab; lctx.fillText(v,X(yd),H-18); lctx.fillText(v,X(yd),36);} }
+  lctx.strokeStyle='rgba(37,99,235,.9)'; lctx.lineWidth=3; lctx.beginPath(); lctx.moveTo(X(los),0); lctx.lineTo(X(los),H); lctx.stroke();
+  const p = G.plays[gi], t = phase==='pre' ? -1 : lf/10, hit = p[9] && t >= p[8];
+  const qi = F.e.findIndex(e=>e[0]==='Q');
+  if(qi>=0){ const qx=row[2*qi]/10, qy=row[2*qi+1]/10; lctx.beginPath(); lctx.arc(X(qx),Y(qy),2*sx,0,7);
+    lctx.fillStyle = hit ? 'rgba(232,89,12,.35)' : 'rgba(244,246,239,.14)'; lctx.fill(); lctx.setLineDash([6,5]); lctx.strokeStyle = hit ? '#e8590c' : 'rgba(244,246,239,.85)'; lctx.lineWidth=2; lctx.stroke(); lctx.setLineDash([]); }
+  const col = {Q:css('--off'),K:css('--block'),O:css('--block'),R:css('--rush'),D:css('--def')};
+  for(let i=0;i<n;i++){
+    const x=row[2*i]/10, y=row[2*i+1]/10, e=F.e[i];
+    if(e[0]==='B'){ lctx.fillStyle='#8a5a2b'; lctx.beginPath(); lctx.ellipse(X(x),Y(y),10,7,0,0,7); lctx.fill(); lctx.strokeStyle='#fff'; lctx.lineWidth=1.5; lctx.stroke(); continue; }
+    const r = e[0]==='Q'?17:14; lctx.beginPath(); lctx.arc(X(x),Y(y),r,0,7); lctx.fillStyle = col[e[0]]||'#999'; lctx.fill();
+    lctx.lineWidth=2; lctx.strokeStyle='rgba(255,255,255,.92)'; lctx.stroke();
+    lctx.fillStyle='#fff'; lctx.font='700 14px ui-monospace, monospace'; lctx.textAlign='center'; lctx.textBaseline='middle'; lctx.fillText(e[1],X(x),Y(y)+1); lctx.textBaseline='alphabetic';
+  }
+  $('lpc').textContent = phase==='pre' ? '0,0 s' : $('curClock').textContent;
+  $('lpc').classList.toggle('hit', hit);
+  $('lst').textContent = phase==='pre' ? 'Avant le snap' : hit ? 'Poche percée' : (phase==='post' ? 'Ballon lâché' : 'Poche intacte');
+}
+// le terrain suit chaque étape du direct
+const _prepare = prepare; prepare = function(i){ _prepare(i); safe('lfield', drawLiveField); };
+const _step = step; step = function(){ _step(); safe('lfield', drawLiveField); };
+const _finish = finish; finish = function(){ _finish(); };
+safe('lfield', drawLiveField);
+safe('liveStars', ()=>{ for(const o of $('liveGame').options){ if(LV[o.value].featured) o.textContent = '★ ' + o.textContent; } });
+/* ===== Action suivante sans attendre + raccourcis clavier ===== */
+function nextPlay(){
+  if(!G) resetGame($('liveGame').value);
+  if(phase==='end') return;
+  show('direct');
+  if(phase==='pre' || phase==='snap'){ lf = G.plays[gi][14].length; step(); finish(); }
+  gi++; lacc = 0;
+  if(gi >= G.plays.length){ gi = G.plays.length-1; phase='end'; setRun(false); endGame(); return; }
+  phase = 'pre'; prepare(gi);
+  if(!running) $('livePill').textContent = 'En pause';
+}
+safe('nextInit', ()=>{
+  $('liveNext').onclick = nextPlay;
+  document.addEventListener('keydown', e=>{
+    const tag = (e.target.tagName||'').toLowerCase(); if(tag==='select' || tag==='input') return;
+    if(!$('endOv').hidden || !$('obOv').hidden) return;
+    if(e.key==='ArrowRight'){ e.preventDefault(); nextPlay(); }
+    else if(e.key===' '){ e.preventDefault(); $('liveBtn').click(); }
+  });
+});
+/* ===== Onboarding ===== */
+let obI = 0;
+function obShow(i){
+  obI = i;
+  document.querySelectorAll('.obs').forEach(x=>x.hidden = +x.dataset.i !== i);
+  document.querySelectorAll('#obDots i').forEach((d,j)=>d.classList.toggle('on', j===i));
+  $('obNext').textContent = i===3 ? 'Ouvrir l\'app →' : 'Suivant →';
+  $('obPrev').disabled = i===0; $('obCount').textContent = `${i+1} / 4`;
+  try{ document.querySelector('.obcard').scrollTop = 0; }catch(e){}
+}
+function obOpen(){ if(running) setRun(false); $('obOv').hidden = false; obShow(0); try{ $('obNext').focus({preventScroll:true}); }catch(e){} }
+function obClose(){ $('obOv').hidden = true; try{ localStorage.setItem('pc_onboarded','1'); }catch(e){} }
+safe('onboarding', ()=>{
+  $('obNext').onclick = ()=>{ if(obI < 3) obShow(obI+1); else obClose(); };
+  $('obSkip').onclick = obClose;
+  $('obPrev').onclick = ()=>{ if(obI > 0) obShow(obI-1); };
+  $('obAgain').onclick = obOpen;
+  document.addEventListener('keydown', e=>{ if($('obOv').hidden) return;
+    if(e.key==='Escape') obClose(); else if(e.key==='ArrowRight'){ e.stopImmediatePropagation(); $('obNext').click(); } else if(e.key==='ArrowLeft' && obI>0) obShow(obI-1); }, true);
+  let seen = false; try{ seen = localStorage.getItem('pc_onboarded')==='1'; }catch(e){}
+  if(!seen) obOpen();
+});
+/* ===== Action précédente : on reconstruit l'état du match jusqu'à l'action d'avant ===== */
+function prevPlay(){
+  if(!G) return;
+  const target = phase==='end' ? G.plays.length-1 : Math.max(0, gi-1);
+  const wasRunning = running, gid = $('liveGame').value;
+  $('endOv').hidden = true;
+  resetGame(gid);
+  for(let j=0; j<target; j++){ gi = j; lf = G.plays[j][14].length; finish(); }
+  gi = target; lf = 0; lacc = 0; phase = 'pre'; prepare(gi);
+  show('direct'); setRun(wasRunning);
+}
+safe('prevInit', ()=>{
+  $('livePrev').onclick = prevPlay;
+  document.addEventListener('keydown', e=>{
+    const tag = (e.target.tagName||'').toLowerCase(); if(tag==='select' || tag==='input') return;
+    if(!$('endOv').hidden || !$('obOv').hidden) return;
+    if(e.key==='ArrowLeft'){ e.preventDefault(); prevPlay(); }
+  });
+});
+/* ===== Mode vidéo : démo scénarisée ===== */
+const T = {on:false, timers:[], vol:.3};
+const sleep = ms => new Promise(r=>{ const id=setTimeout(r, ms); T.timers.push(id); });
+function tEl(sel){ return typeof sel==='string' ? document.querySelector(sel) : sel; }
+function tCenter(el){ const r = el.getBoundingClientRect(); return {x:r.left+r.width/2, y:r.top+r.height/2}; }
+async function tMove(sel, dur=800){
+  const el = tEl(sel); if(!el || !T.on) return;
+  const c = tCenter(el), cur = $('tCursor');
+  cur.style.transitionDuration = dur+'ms'; cur.style.transform = `translate(${c.x-6}px,${c.y-4}px)`;
+  await sleep(dur+80);
+}
+async function tClick(sel, dur=800){
+  const el = tEl(sel); if(!el || !T.on) return;
+  await tMove(el, dur);
+  const cur = $('tCursor'); cur.classList.remove('click'); void cur.offsetWidth; cur.classList.add('click');
+  await sleep(180); if(T.on) el.click(); await sleep(250);
+}
+async function tSelect(sel, value){ const el = tEl(sel); await tMove(el); if(!T.on) return; el.value = value; el.dispatchEvent(new Event('change')); await sleep(300); }
+function tSub(text){ const s = $('tSub'); if(!$('tsSubs').checked || !text){ s.hidden = true; return; } s.textContent = text; s.hidden = false; s.classList.remove('pop'); void s.offsetWidth; s.classList.add('pop'); }
+function tZoom(sel, scale=1.4){
+  // Zoom sur la zone de contenu seulement : barre latérale et barre d'outils restent fixes.
+  const m = document.querySelector('main'); if(!sel){ m.style.transform = ''; return; }
+  const el = tEl(sel); if(!el) return;
+  m.style.transform = '';
+  const box = document.querySelector('.content').getBoundingClientRect();
+  const top = document.querySelector('.toolbar').getBoundingClientRect().bottom, bottom = window.innerHeight;
+  const mr = m.getBoundingClientRect(), r = el.getBoundingClientRect();
+  const viewW = box.width, viewH = bottom - top;
+  const k = Math.max(1, Math.min(scale, viewW*0.9/r.width, viewH*0.9/r.height));
+  const cx = r.left - mr.left + r.width/2, cy = r.top - mr.top + r.height/2;
+  let tx = box.left + viewW/2 - mr.left - cx*k;
+  let ty = top + viewH/2 - mr.top - cy*k;
+  const W = mr.width*k, H = m.scrollHeight*k;
+  if(W >= viewW){ tx = Math.min(tx, box.left - mr.left); tx = Math.max(tx, box.right - mr.left - W); }
+  if(H >= viewH){ ty = Math.min(ty, top - mr.top); ty = Math.max(ty, bottom - mr.top - H); }
+  m.style.transform = `translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px) scale(${k.toFixed(3)})`;
+}
+async function tCardShow(k, t, sub, ms){ $('tCardK').textContent=k; $('tCardT').textContent=t; $('tCardS').textContent=sub; $('tCard').hidden=false; await sleep(ms); $('tCard').hidden=true; }
+function tFade(to, ms){ const a = $('tMusic'), from = a.volume, t0 = performance.now();
+  return new Promise(res=>{ const f = ()=>{ const k = Math.min(1,(performance.now()-t0)/ms); a.volume = from + (to-from)*k; k<1 && T.on ? requestAnimationFrame(f) : res(); }; f(); }); }
+function tStop(){
+  T.on = false; T.timers.forEach(clearTimeout); T.timers = [];
+  for(const id of ['tCursor','tSub','tCard','tCount','tStop']) $(id).hidden = true;
+  tZoom(null); document.querySelector('.app').classList.remove('touring');
+  const a = $('tMusic'); a.pause(); a.currentTime = 0;
+  if(running) setRun(false);
+}
+async function tour(){
+  T.on = true; T.timers = [];
+  document.querySelector('.app').classList.add('touring');
+  $('tStop').hidden = false;
+  // remise à zéro de l'état
+  $('endOv').hidden = true; if(running) setRun(false);
+  $('lMe').value = 'KC'; $('lOpp').value = 'BUF'; $('liveGame').value = GIDS.find(g=>LV[g].featured && LV[g].home==='KC') || $('liveGame').value;
+  resetGame($('liveGame').value); show('match');
+  // compte à rebours
+  for(const n of [3,2,1]){ $('tCount').textContent = n; $('tCount').hidden = false; await sleep(800); if(!T.on) return; }
+  $('tCount').hidden = true;
+  window.__tourMusicAt = Date.now();
+  const a = $('tMusic'); a.volume = 0; a.currentTime = 0; try{ await a.play(); }catch(e){}
+  tFade(T.vol, 1500);
+  $('tCursor').hidden = false; $('tCursor').style.transform = `translate(${innerWidth/2}px,${innerHeight/2}px)`;
+  // 1. ouverture
+  tSub('En NFL, tout se joue en trois secondes.');
+  await tCardShow('NFL Big Data Bowl', 'Pocket Clock', 'Combien de temps la poche protège-t-elle le quarterback ? Et comment la faire tenir, ou tomber.', 4200); if(!T.on) return;
+  // 2. onboarding
+  obOpen(); tSub('La poche, c\'est le mur humain qui protège le quarterback.');
+  await sleep(3200); await tClick('#obNext');
+  tSub('Quand elle cède, le risque de sack passe de 0,3 % à 19 %.'); await sleep(3000); await tClick('#obNext');
+  tSub('Pocket Clock la chronomètre, image par image : 3,7 secondes en médiane.'); await sleep(3000); await tClick('#obNext');
+  tSub('Et transforme ce chrono en décisions pour le coach.'); await sleep(2600); await tClick('#obNext'); if(!T.on) return;
+  // 3. direct
+  tSub('Un vrai match de la saison, rejoué comme en direct.');
+  await tClick('#tabs button[data-view=direct]');
+  await tClick('#liveSpeed button[data-s="2"]', 600);
+  await tClick('#liveBtn'); await sleep(900);
+  tZoom('#lfield', 1.45); tSub('Les joueurs bougent, le chrono tourne : la poche se referme en direct.');
+  await sleep(5200); tZoom(null); await sleep(700);
+  tZoom('#preVerb', 1.7); tSub('Avant chaque snap, l\'app recalcule la meilleure décision.');
+  await sleep(4200); tZoom(null); await sleep(600); if(!T.on) return;
+  // 4. accélérer jusqu'aux alertes
+  tSub('Quand une protection craque, une alerte apparaît.');
+  for(let i=0;i<14 && T.on;i++){ await tClick('#liveNext', i ? 260 : 700); if($('alerts').children.length) break; }
+  await sleep(500); if($('alerts').children.length){ tZoom('#alerts', 1.5); await sleep(3800); tZoom(null); await sleep(600); }
+  // 5. fin et bilan
+  tSub('Fin du match : qui a gagné la bataille de la poche ?');
+  await tClick('#liveEnd'); await sleep(2600);
+  await tClick('#eBilan'); await sleep(700);
+  tZoom('#bVerdict', 1.6); tSub('Le bilan l\'explique en une phrase, chiffres à l\'appui.'); await sleep(4200); tZoom(null); await sleep(600); if(!T.on) return;
+  // 6. plan de match
+  await tClick('#tabs button[data-view=match]');
+  tSub('Avant le match : choisissez l\'adversaire et la situation.');
+  await tSelect('#lOpp', 'PIT'); await tClick('#lDef', 500);
+  tZoom('#lVerb', 1.7); tSub('Une décision claire, comparée à toutes les options.'); await sleep(4200); tZoom(null); await sleep(600);
+  tZoom('#duel', 1.4); tSub('Le duel de poche montre qui a l\'avantage.'); await sleep(3600); tZoom(null); await sleep(500); if(!T.on) return;
+  // 7. joueurs
+  await tClick('#tabs button[data-view=joueurs]');
+  tZoom('#rushT', 1.35); tSub('Les rushers qui arrivent en premier, les bloqueurs qui tiennent.'); await sleep(4000); tZoom(null); await sleep(500);
+  // 8. fiabilité
+  await tClick('#tabs button[data-view=fiabilite]');
+  tZoom('#valid', 1.25); tSub('Testé sur des matchs que le modèle n\'avait jamais vus.'); await sleep(4000); tZoom(null); await sleep(500); if(!T.on) return;
+  // 9. clôture
+  tSub('');  $('tCursor').hidden = true;
+  tFade(T.vol*1.6 > 1 ? 1 : T.vol*1.6, 800);
+  await tCardShow('Chaque dixième de seconde compte', 'Pocket Clock', 'Données NFL Next Gen Stats et PFF · NFL Big Data Bowl · AWS', 5000);
+  await tFade(0, 1800);
+  tStop();
+}
+safe('tourInit', ()=>{
+  $('tourBtn').onclick = ()=>{ $('tourStart').hidden = false; };
+  $('tsCancel').onclick = ()=>{ $('tourStart').hidden = true; };
+  $('tsVol').oninput = e=>{ T.vol = +e.target.value/100; };
+  $('tsGo').onclick = ()=>{ $('tourStart').hidden = true; T.vol = +$('tsVol').value/100; tour(); };
+  $('tStop').onclick = tStop;
+  document.addEventListener('keydown', e=>{ if(T.on && e.key==='Escape') tStop(); });
+});
+</script>

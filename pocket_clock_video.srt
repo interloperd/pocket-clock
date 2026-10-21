@@ -1,0 +1,67 @@
+1
+00:00:02,985 --> 00:00:05,635
+En NFL, tout se joue en trois secondes.
+
+2
+00:00:07,185 --> 00:00:10,085
+La poche, c'est le mur humain qui protège le quarterback.
+
+3
+00:00:11,785 --> 00:00:16,235
+Quand elle cède, le risque de sack passe de 0,3 % à 19 %.
+
+4
+00:00:16,285 --> 00:00:21,785
+Pocket Clock la chronomètre, image par image : 3,7 secondes en médiane.
+
+5
+00:00:21,835 --> 00:00:24,385
+Et transforme ce chrono en décisions pour le coach.
+
+6
+00:00:24,435 --> 00:00:28,835
+Un vrai match de la saison, rejoué comme en direct.
+
+7
+00:00:28,885 --> 00:00:31,535
+Les joueurs bougent, le chrono tourne : la poche se referme sous nos yeux.
+
+8
+00:00:34,885 --> 00:00:39,635
+Avant chaque snap, l'app recalcule la meilleure décision.
+
+9
+00:00:39,685 --> 00:00:44,385
+Quand une protection craque, une alerte apparaît.
+
+10
+00:00:45,885 --> 00:00:50,185
+Fin du match : qui a gagné la bataille de la poche ?
+
+11
+00:00:54,085 --> 00:00:56,685
+Le bilan l'explique en une phrase, chiffres à l'appui.
+
+12
+00:01:00,185 --> 00:01:02,935
+Avant le match, on choisit l'adversaire et la situation.
+
+13
+00:01:02,985 --> 00:01:05,735
+Une décision claire, comparée à toutes les options.
+
+14
+00:01:07,285 --> 00:01:10,035
+Le duel de poche montre qui a l'avantage.
+
+15
+00:01:12,685 --> 00:01:17,735
+Les rushers qui arrivent en premier, les bloqueurs qui tiennent.
+
+16
+00:01:18,585 --> 00:01:21,835
+Et tout est testé sur des matchs que le modèle n'avait jamais vus.
+
+17
+00:01:23,385 --> 00:01:26,335
+Pocket Clock. Chaque dixième de seconde compte.
